@@ -50,14 +50,18 @@ export function Marca({
   nombreRancho,
   tamano = "md",
   orientacion = "horizontal",
+  tono = "marca",
   className,
 }: {
   nombreRancho?: string;
   tamano?: "sm" | "md" | "lg";
   orientacion?: "horizontal" | "apilada";
+  /** "claro" para fondos oscuros, donde el verde de marca no contrasta. */
+  tono?: "marca" | "claro";
   className?: string;
 }) {
   const t = TAMANOS[tamano];
+  const claro = tono === "claro";
   return (
     <div
       className={cn(
@@ -68,7 +72,10 @@ export function Marca({
         className
       )}
     >
-      <LogoRanchOps variante="duotono" className={cn(t.logo, "text-primary")} />
+      <LogoRanchOps
+        variante="duotono"
+        className={cn(t.logo, claro ? "text-primary-foreground" : "text-primary")}
+      />
       <div className="min-w-0">
         <p
           className={cn(
@@ -79,7 +86,13 @@ export function Marca({
           RanchOps
         </p>
         {nombreRancho && (
-          <p className={cn("truncate text-muted-foreground", t.rancho)}>
+          <p
+            className={cn(
+              "truncate",
+              t.rancho,
+              claro ? "text-primary-foreground/70" : "text-muted-foreground"
+            )}
+          >
             {nombreRancho}
           </p>
         )}
