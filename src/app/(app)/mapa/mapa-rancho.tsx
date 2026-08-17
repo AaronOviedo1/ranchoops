@@ -68,7 +68,9 @@ export function MapaRancho({
   } | null>(null);
   const [guardando, setGuardando] = useState(false);
   const modoRef = useRef(modo);
-  modoRef.current = modo;
+  useEffect(() => {
+    modoRef.current = modo;
+  }, [modo]);
 
   const sinGeom = potreros.filter((p) => !p.geom);
 
