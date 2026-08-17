@@ -4,6 +4,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { iniciarSesion, registrarse } from "./actions";
 import { Aviso } from "@/components/aviso";
+import { CampoPassword } from "@/components/campo-password";
 import { Marca } from "@/components/marca";
 import { PanelMarca } from "@/components/panel-marca";
 
@@ -74,10 +75,8 @@ export default async function LoginPage({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="password">Contraseña</Label>
-                  <Input
+                  <CampoPassword
                     id="password"
-                    name="password"
-                    type="password"
                     required
                     autoComplete="current-password"
                     className={campo}
@@ -116,10 +115,8 @@ export default async function LoginPage({
                 </div>
                 <div className="space-y-1.5">
                   <Label htmlFor="password-r">Contraseña</Label>
-                  <Input
+                  <CampoPassword
                     id="password-r"
-                    name="password"
-                    type="password"
                     required
                     minLength={8}
                     autoComplete="new-password"

@@ -4,12 +4,26 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/*
+  Fuente de un solo glifo: sustituye el punto (U+2022) con el que el navegador
+  enmascara las contraseñas por una silueta de vaca. El valor del campo no se
+  toca — sigue siendo un input type="password" normal.
+  Se genera con scripts/generar-fuente-vaquitas.py
+*/
+@font-face {
+  font-family: "RanchOps Vaquitas";
+  src: url("/fuentes/vaquitas.woff2") format("woff2");
+  font-display: block;
+}
+
 @theme inline {
   /* Tipografía — cableada a las variables que emite next/font (ver src/app/layout.tsx).
      `@theme inline` emite var(...) en vez de copiar el literal, por eso funciona. */
   --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
   --font-mono: var(--font-geist-mono), ui-monospace, monospace;
   --font-heading: var(--font-zilla), ui-serif, Georgia, "Times New Roman", serif;
+  /* Máscara de contraseña: si la fuente no carga, caen los puntos normales */
+  --font-vaquitas: "RanchOps Vaquitas", ui-sans-serif, system-ui, sans-serif;
 
   --color-background: var(--background);
   --color-foreground: var(--foreground);
