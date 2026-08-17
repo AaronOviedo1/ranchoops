@@ -1,0 +1,9 @@
+Mapbox con cuenta 
+- ovy3200@gmail.com
+- contraseña random guardada con google
+Puse la tarjeta NU como metodo de pago
+- Dicen que solo cobra hasta usar sus servicios mas recurrentemente
+
+Supabase
+- Organization de Nodo 
+- DB password generada random guardada en google
