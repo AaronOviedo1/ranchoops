@@ -3,6 +3,22 @@
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 
+/** Traduce los errores de Supabase Auth sin ocultar la causa real. */
+function mensajeDeError(mensaje: string): string {
+  const m = mensaje.toLowerCase();
+  if (m.includes("invalid login credentials")) return "Correo o contraseña incorrectos";
+  if (m.includes("email not confirmed")) {
+    return "Tu cuenta aún no está confirmada. Revisa tu correo o pide al administrador que la confirme.";
+  }
+  if (m.includes("email rate limit") || m.includes("rate limit")) {
+    return "Demasiados intentos. Espera unos minutos y vuelve a intentar.";
+  }
+  if (m.includes("user already registered")) {
+    return "Ese correo ya tiene cuenta. Usa la pestaña Entrar.";
+  }
+  return mensaje;
+}
+
 export async function iniciarSesion(formData: FormData) {
   const supabase = await createClient();
   const email = String(formData.get("email") ?? "").trim();
@@ -10,7 +26,7 @@ export async function iniciarSesion(formData: FormData) {
 
   const { error } = await supabase.auth.signInWithPassword({ email, password });
   if (error) {
-    redirect(`/login?error=${encodeURIComponent("Correo o contraseña incorrectos")}`);
+    redirect(`/login?error=${encodeURIComponent(mensajeDeError(error.message))}`);
   }
   redirect("/");
 }
@@ -31,7 +47,7 @@ export async function registrarse(formData: FormData) {
     options: { data: { nombre } },
   });
   if (error) {
-    redirect(`/login?error=${encodeURIComponent(error.message)}&modo=registro`);
+    redirect(`/login?error=${encodeURIComponent(mensajeDeError(error.message))}&modo=registro`);
   }
 
   if (data.user) {
@@ -40,7 +56,11 @@ export async function registrarse(formData: FormData) {
 
   // Si la confirmación por correo está activa, session será null
   if (!data.session) {
-    redirect(`/login?aviso=${encodeURIComponent("Revisa tu correo para confirmar la cuenta")}`);
+    redirect(
+      `/login?aviso=${encodeURIComponent(
+        "Cuenta creada. Falta confirmarla: revisa tu correo (incluida la carpeta de spam). Si no llega, desactiva “Confirm email” en Supabase → Authentication → Sign In / Providers → Email."
+      )}`
+    );
   }
   redirect("/");
 }

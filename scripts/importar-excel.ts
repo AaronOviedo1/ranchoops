@@ -124,28 +124,10 @@ async function importarAnimales(ranchoId: string) {
 
   let vacas = 0;
   let crias = 0;
-  let eventos = 0;
 
   for (let i = iEnc + 1; i < filas.length; i++) {
     const f = filas[i];
     const arete = numero(f[col.arete]);
-    const etiquetaGeneral = texto(f[col.arete]);
-
-    // Filas "GENERAL" → bitácora
-    if (!arete && etiquetaGeneral && /general|ganado/i.test(etiquetaGeneral)) {
-      const fecha = f.find(esFecha);
-      const obs = [...f].reverse().find((c) => typeof c === "string" && c.length > 20);
-      if (fecha && obs) {
-        await supabase.from("eventos").insert({
-          rancho_id: ranchoId,
-          tipo: "nota_bitacora",
-          fecha: fechaISO(fecha),
-          obs: String(obs),
-        });
-        eventos++;
-      }
-      continue;
-    }
     if (!arete) continue;
 
     const nacimiento = esFecha(f[col.nacimiento]) ? fechaISO(f[col.nacimiento] as Date) : null;
@@ -200,7 +182,46 @@ async function importarAnimales(ranchoId: string) {
       crias++;
     }
   }
-  console.log(`• Animales: ${vacas} vacas/vaquillas, ${crias} crías, ${eventos} notas generales.`);
+  console.log(`• Animales: ${vacas} vacas/vaquillas, ${crias} crías.`);
+}
+
+// ============================================================
+// 1b. Trabajos masivos del hato ("GENERAL" / "Ganado UltraRed") → bitácora
+// ============================================================
+async function importarEventosGenerales(ranchoId: string) {
+  const { count } = await supabase
+    .from("eventos")
+    .select("*", { count: "exact", head: true })
+    .eq("rancho_id", ranchoId)
+    .eq("tipo", "nota_bitacora");
+  if ((count ?? 0) > 0) {
+    console.log("• Eventos generales: ya hay notas de bitácora, se salta.");
+    return;
+  }
+
+  const libro = hojas("INV GANADO JC.xlsx");
+  let eventos = 0;
+
+  for (const filas of Object.values(libro)) {
+    for (const f of filas) {
+      // La etiqueta puede caer en cualquier columna, se busca en toda la fila
+      const esMasivo = (f ?? []).some(
+        (c) => typeof c === "string" && c.length < 25 && /^(general|ganado\s)/i.test(c.trim())
+      );
+      if (!esMasivo) continue;
+      const fecha = f.find(esFecha);
+      const obs = [...f].reverse().find((c) => typeof c === "string" && c.length > 20);
+      if (!fecha || !obs) continue;
+      await supabase.from("eventos").insert({
+        rancho_id: ranchoId,
+        tipo: "nota_bitacora",
+        fecha: fechaISO(fecha),
+        obs: String(obs).trim(),
+      });
+      eventos++;
+    }
+  }
+  console.log(`• Eventos generales: ${eventos} trabajos del hato en bitácora.`);
 }
 
 // ============================================================
@@ -376,14 +397,16 @@ async function importarLluvias(ranchoId: string) {
 // ============================================================
 // 4. Ventas — ventas.xlsx (hojas por año)
 // ============================================================
+// El orden importa: lo más específico primero ("vac y vaq" antes que "vaca").
 const CLASES_VENTA: [RegExp, string][] = [
+  [/vac.*y.*vaq/i, "vacas y vaquillas"],
   [/^bos\b|becerro/i, "becerros"],
   [/^bas\b|becerra/i, "becerras"],
-  [/vaquilla/i, "vaquillas"],
-  [/torete/i, "toretes"],
+  [/vaquilla|^vaq\b/i, "vaquillas"],
+  [/torete|^trt\b/i, "toretes"],
   [/toro/i, "toros"],
-  [/vaca/i, "vacas"],
-  [/caballo/i, "caballos"],
+  [/vaca|^vac\b/i, "vacas"],
+  [/caball|cabalo|yegua|potrillo/i, "caballos"],
 ];
 
 function claseDeVenta(descripcion: string): string | null {
@@ -399,14 +422,21 @@ async function importarVentas(ranchoId: string) {
   const libro = hojas("ventas.xlsx");
   let ventas = 0;
   let renglones = 0;
+  const cuadre: { anio: string; importado: number; declarado: number }[] = [];
 
   for (const [hoja, filas] of Object.entries(libro)) {
     if (!/^\d{4}$/.test(hoja)) continue;
+    // Celda "TOTAL:" del encabezado de la hoja, para cuadrar al final
+    const declarado = numero(filas[0]?.[3]) ?? 0;
+    let importadoAnio = 0;
 
+    // Columnas reales de la hoja:
+    // 0 Descripcion · 1 Cabezas · 2 Kilos salida · 3 Prom · 4 Kilos venta
+    // 5 Prom · 6 Precio · 7 $/cabeza · 8 Total   (la col. 10+ es el resumen anual)
     let i = 0;
     while (i < filas.length) {
       const f = filas[i];
-      const fecha = esFecha(f?.[1]) ? (f[1] as Date) : esFecha(f?.[0]) ? (f[0] as Date) : null;
+      const fecha = esFecha(f?.[0]) ? (f[0] as Date) : esFecha(f?.[1]) ? (f[1] as Date) : null;
       if (!fecha) {
         i++;
         continue;
@@ -429,39 +459,39 @@ async function importarVentas(ranchoId: string) {
       let j = i + 1;
       for (; j < filas.length && j < i + 40; j++) {
         const g = filas[j];
-        const c1 = texto(g?.[1]);
-        if (!c1) {
-          if (esFecha(g?.[1]) || esFecha(g?.[0])) break;
-          continue;
-        }
-        if (/^descripcion/i.test(c1)) continue;
-        if (/^total/i.test(c1)) {
+        if (esFecha(g?.[0])) break; // empieza otra venta
+        const c0 = texto(g?.[0]);
+        if (!c0) continue;
+        if (/^descripcion/i.test(c0)) continue;
+        if (/^total/i.test(c0)) {
           j++;
-          // filas de notas/guía después del total
+          // notas, guía y REEMO vienen después de la fila "Total"
           for (; j < filas.length && j < i + 45; j++) {
             const h = filas[j];
-            const celda1 = texto(h?.[1]);
-            if (esFecha(h?.[1]) || esFecha(h?.[0])) break;
-            if (celda1 && /^notas/i.test(celda1)) obs = texto(h?.[2]);
-            else if (celda1 && /guia/i.test(celda1)) {
-              guia = celda1.replace(/guia/i, "").trim() || null;
-              const otros = (h ?? []).map(texto).filter(Boolean) as string[];
-              const r = otros.find((x) => /reemo/i.test(x));
-              if (r) reemo = r.replace(/reemo/i, "").trim() || null;
-            } else if (celda1) break;
+            if (esFecha(h?.[0])) break;
+            const celda0 = texto(h?.[0]);
+            if (!celda0) continue;
+            if (/^notas/i.test(celda0)) obs = texto(h?.[1]);
+            else if (/guia/i.test(celda0)) {
+              guia = celda0.replace(/guia/i, "").trim() || null;
+              const reemoCelda = (h ?? [])
+                .map(texto)
+                .find((x) => x && /reemo/i.test(x));
+              if (reemoCelda) reemo = reemoCelda.replace(/reemo/i, "").trim() || null;
+            } else break;
           }
           break;
         }
-        const clase = claseDeVenta(c1);
-        const cabezas = numero(g?.[2]);
+        const clase = claseDeVenta(c0);
+        const cabezas = numero(g?.[1]);
         if (clase && cabezas) {
-          const precio = numero(g?.[7]);
-          const total = numero(g?.[9]) ?? 0;
+          const precio = numero(g?.[6]);
+          const total = numero(g?.[8]) ?? 0;
           filasRenglon.push({
             clase,
             cabezas,
-            kilos_salida: numero(g?.[3]),
-            kilos_venta: numero(g?.[5]) ?? numero(g?.[3]),
+            kilos_salida: numero(g?.[2]),
+            kilos_venta: numero(g?.[4]) ?? numero(g?.[2]),
             precio_kg: precio != null && precio < 1000 ? precio : null,
             precio_cabeza: precio != null && precio >= 1000 ? precio : null,
             total,
@@ -490,12 +520,23 @@ async function importarVentas(ranchoId: string) {
           );
           ventas++;
           renglones += filasRenglon.length;
+          importadoAnio += filasRenglon.reduce((s, r) => s + r.total, 0);
         }
       }
       i = Math.max(j, i + 1);
     }
+    if (declarado > 0) cuadre.push({ anio: hoja, importado: importadoAnio, declarado });
   }
+
   console.log(`• Ventas: ${ventas} ventas con ${renglones} renglones.`);
+  for (const c of cuadre) {
+    const dif = ((c.importado - c.declarado) / c.declarado) * 100;
+    const marca = Math.abs(dif) < 1 ? "✓" : "⚠";
+    console.log(
+      `    ${marca} ${c.anio}: $${Math.round(c.importado).toLocaleString("es-MX")}` +
+        ` vs $${Math.round(c.declarado).toLocaleString("es-MX")} del Excel (${dif >= 0 ? "+" : ""}${dif.toFixed(1)}%)`
+    );
+  }
 }
 
 // ============================================================
@@ -518,6 +559,7 @@ async function principal() {
 
   console.log(`Importando a "${rancho.nombre}" (${rancho.id})…\n`);
   await importarAnimales(rancho.id);
+  await importarEventosGenerales(rancho.id);
   await importarPotreros(rancho.id);
   await importarLluvias(rancho.id);
   await importarVentas(rancho.id);
