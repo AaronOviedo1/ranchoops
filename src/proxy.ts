@@ -53,8 +53,9 @@ export default async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Los estáticos de public/ no pasan por aquí: si no, una fuente pedida
-    // desde el login (sin sesión todavía) se redirige a /login y nunca carga.
-    "/((?!_next/static|_next/image|favicon.ico|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?|ttf|otf)$).*)",
+    // Los estáticos no pasan por aquí: si no, una fuente o el manifiesto
+    // pedidos desde el login (sin sesión todavía) se redirigen a /login y
+    // nunca cargan, y la app deja de poder instalarse.
+    "/((?!_next/static|_next/image|favicon.ico|manifest.webmanifest|.*\\.(?:svg|png|jpg|jpeg|gif|webp|woff2?|ttf|otf|webmanifest)$).*)",
   ],
 };

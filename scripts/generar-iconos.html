@@ -1,0 +1,41 @@
+<!doctype html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  html, body { margin: 0; padding: 0; background: transparent; }
+  .lienzo {
+    width: var(--lado); height: var(--lado);
+    background: #2E5A3E;
+    display: flex; align-items: center; justify-content: center;
+  }
+  /* "any": el logo ocupa buena parte del cuadro */
+  .lienzo[data-tipo="any"] svg { width: 68%; height: 68%; }
+  /* "maskable": el sistema recorta hasta un círculo; el logo se queda dentro
+     de la zona segura (60% central) */
+  .lienzo[data-tipo="maskable"] svg { width: 52%; height: 52%; }
+</style>
+</head>
+<body>
+<div class="lienzo" id="lienzo" data-tipo="any">
+  <svg viewBox="0 0 24 24" fill="none" stroke="#FAF7F0" stroke-width="1.6"
+       stroke-linecap="round" stroke-linejoin="round">
+    <path d="M8.5 3.25h7A3.25 3.25 0 0 1 18.75 6.5v6.75c0 .9-.36 1.75-.99 2.38l-5.06 5.06a1 1 0 0 1-1.4 0L6.24 15.63a3.36 3.36 0 0 1-.99-2.38V6.5A3.25 3.25 0 0 1 8.5 3.25Z"
+          fill="#E0A526"/>
+    <circle cx="12" cy="6.9" r="1.1"/>
+    <path d="M8.6 10.6c1.2-.9 2.1-.9 3.4 0s2.2.9 3.4 0"/>
+    <path d="M8.6 13.4c1.2-.9 2.1-.9 3.4 0s2.2.9 3.4 0"/>
+  </svg>
+</div>
+<script>
+  const p = new URLSearchParams(location.search);
+  const lado = p.get("lado") || "512";
+  const tipo = p.get("tipo") || "any";
+  const el = document.getElementById("lienzo");
+  el.style.setProperty("--lado", lado + "px");
+  el.dataset.tipo = tipo;
+  document.body.style.width = lado + "px";
+  document.body.style.height = lado + "px";
+</script>
+</body>
+</html>
