@@ -5,11 +5,14 @@
 @custom-variant dark (&:is(.dark *));
 
 @theme inline {
+  /* Tipografía — cableada a las variables que emite next/font (ver src/app/layout.tsx).
+     `@theme inline` emite var(...) en vez de copiar el literal, por eso funciona. */
+  --font-sans: var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+  --font-heading: var(--font-zilla), ui-serif, Georgia, "Times New Roman", serif;
+
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
-  --font-mono: "Geist Mono", "Geist Mono Fallback", ui-monospace, monospace;
-  --font-heading: "Geist", "Geist Fallback", ui-sans-serif, system-ui, sans-serif;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -27,6 +30,7 @@
   --color-input: var(--input);
   --color-border: var(--border);
   --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
   --color-accent-foreground: var(--accent-foreground);
   --color-accent: var(--accent);
   --color-muted-foreground: var(--muted-foreground);
@@ -39,6 +43,30 @@
   --color-popover: var(--popover);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
+
+  /* Marca — el maíz es color de relleno, nunca de texto sobre fondo claro */
+  --color-marca: var(--accent-marca);
+  --color-marca-suave: var(--accent-marca-suave);
+  --color-marca-fuerte: var(--accent-marca-fuerte);
+  --color-marca-foreground: var(--accent-marca-foreground);
+
+  /* Estados semánticos — reemplazan los bg-green-100 sueltos */
+  --color-exito: var(--exito);
+  --color-exito-suave: var(--exito-suave);
+  --color-exito-fuerte: var(--exito-fuerte);
+  --color-alerta: var(--alerta);
+  --color-alerta-suave: var(--alerta-suave);
+  --color-alerta-fuerte: var(--alerta-fuerte);
+  --color-peligro: var(--peligro);
+  --color-peligro-suave: var(--peligro-suave);
+  --color-peligro-fuerte: var(--peligro-fuerte);
+  --color-neutro: var(--neutro);
+  --color-neutro-suave: var(--neutro-suave);
+  --color-neutro-fuerte: var(--neutro-fuerte);
+  --color-info: var(--info);
+  --color-info-suave: var(--info-suave);
+  --color-info-fuerte: var(--info-fuerte);
+
   --radius-sm: calc(var(--radius) * 0.6);
   --radius-md: calc(var(--radius) * 0.8);
   --radius-lg: var(--radius);
@@ -48,73 +76,138 @@
   --radius-4xl: calc(var(--radius) * 2.6);
 }
 
+/*
+  Paleta "Mezquite y Maíz".
+  Espejo en hex para Mapbox: src/lib/colores.ts — si cambias uno, cambia el otro.
+*/
 :root {
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
+  /* Base: hueso y tinta cálida */
+  --background: oklch(0.9765 0.0098 87); /* #FAF7F0 hueso */
+  --foreground: oklch(0.2439 0.0097 89); /* #22201B tinta · 15.2:1 */
   --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
+  --card-foreground: oklch(0.2439 0.0097 89);
   --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
+  --popover-foreground: oklch(0.2439 0.0097 89);
+
+  /* Marca */
+  --primary: oklch(0.4273 0.068 154); /* #2E5A3E mezquite · 7.41:1 */
+  --primary-foreground: oklch(0.9765 0.0098 87);
+  --accent-marca: oklch(0.7583 0.147 81); /* #E0A526 maíz · solo relleno */
+  --accent-marca-foreground: oklch(0.2439 0.0097 89);
+  --accent-marca-suave: oklch(0.95 0.045 85);
+  --accent-marca-fuerte: oklch(0.45 0.095 75); /* #744C00 · 7.57:1 */
+
+  /* Superficies neutras cálidas */
+  --secondary: oklch(0.945 0.016 86);
+  --secondary-foreground: oklch(0.2439 0.0097 89);
+  --muted: oklch(0.955 0.014 86);
+  --muted-foreground: oklch(0.505 0.017 86); /* 5.5:1 */
+  --accent: oklch(0.945 0.02 90);
+  --accent-foreground: oklch(0.2439 0.0097 89);
+
+  /* Bordes y foco */
+  --border: oklch(0.8993 0.0244 86); /* #E5DDCC adobe */
+  --input: oklch(0.87 0.026 86); /* un paso más oscuro: los campos deben leerse */
+  --ring: oklch(0.55 0.075 154);
+  --destructive: oklch(0.505 0.17 28); /* 6.4:1 */
+  --destructive-foreground: oklch(0.9765 0.0098 87);
+
+  /* Semáforo / estados */
+  --exito: oklch(0.5787 0.111 145);
+  --exito-suave: oklch(0.94 0.035 145);
+  --exito-fuerte: oklch(0.4 0.09 145);
+  --alerta: oklch(0.7583 0.147 81);
+  --alerta-suave: oklch(0.95 0.045 85);
+  --alerta-fuerte: oklch(0.45 0.095 75);
+  --peligro: oklch(0.6045 0.141 46);
+  --peligro-suave: oklch(0.94 0.03 46);
+  --peligro-fuerte: oklch(0.44 0.115 42);
+  --neutro: oklch(0.7019 0.0276 85);
+  --neutro-suave: oklch(0.945 0.012 85);
+  --neutro-fuerte: oklch(0.43 0.018 85);
+  --info: oklch(0.62 0.095 235);
+  --info-suave: oklch(0.945 0.025 235);
+  --info-fuerte: oklch(0.42 0.085 240);
+
+  /* Gráficas: categórica derivada de la marca */
+  --chart-1: oklch(0.58 0.1 150); /* pasto */
+  --chart-2: oklch(0.76 0.147 81); /* maíz · solo relleno, nunca línea de 1px */
+  --chart-3: oklch(0.6 0.141 46); /* terracota */
+  --chart-4: oklch(0.62 0.095 235); /* cielo · lluvia */
+  --chart-5: oklch(0.52 0.085 340); /* ciruela */
+
   --radius: 0.625rem;
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.145 0 0);
-  --sidebar-primary: oklch(0.205 0 0);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.97 0 0);
-  --sidebar-accent-foreground: oklch(0.205 0 0);
-  --sidebar-border: oklch(0.922 0 0);
-  --sidebar-ring: oklch(0.708 0 0);
+
+  /* Sidebar */
+  --sidebar: oklch(0.962 0.013 86);
+  --sidebar-foreground: oklch(0.2439 0.0097 89);
+  --sidebar-primary: oklch(0.4273 0.068 154);
+  --sidebar-primary-foreground: oklch(0.9765 0.0098 87);
+  --sidebar-accent: oklch(0.935 0.02 88);
+  --sidebar-accent-foreground: oklch(0.4273 0.068 154); /* 6.55:1 */
+  --sidebar-border: oklch(0.8993 0.0244 86);
+  --sidebar-ring: oklch(0.55 0.075 154);
 }
 
+/* Modo oscuro: coherente con la marca, pero sin ThemeProvider montado hoy. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
-  --chart-1: oklch(0.87 0 0);
-  --chart-2: oklch(0.556 0 0);
-  --chart-3: oklch(0.439 0 0);
-  --chart-4: oklch(0.371 0 0);
-  --chart-5: oklch(0.269 0 0);
-  --sidebar: oklch(0.205 0 0);
-  --sidebar-foreground: oklch(0.985 0 0);
-  --sidebar-primary: oklch(0.488 0.243 264.376);
-  --sidebar-primary-foreground: oklch(0.985 0 0);
-  --sidebar-accent: oklch(0.269 0 0);
-  --sidebar-accent-foreground: oklch(0.985 0 0);
-  --sidebar-border: oklch(1 0 0 / 10%);
-  --sidebar-ring: oklch(0.556 0 0);
+  --background: oklch(0.19 0.012 88);
+  --foreground: oklch(0.96 0.008 87);
+  --card: oklch(0.24 0.014 88);
+  --card-foreground: oklch(0.96 0.008 87);
+  --popover: oklch(0.24 0.014 88);
+  --popover-foreground: oklch(0.96 0.008 87);
+
+  --primary: oklch(0.72 0.09 152);
+  --primary-foreground: oklch(0.19 0.012 88);
+  --accent-marca: oklch(0.78 0.14 82);
+  --accent-marca-foreground: oklch(0.19 0.012 88);
+  --accent-marca-suave: oklch(0.78 0.14 82 / 18%);
+  --accent-marca-fuerte: oklch(0.82 0.12 82);
+
+  --secondary: oklch(0.29 0.016 88);
+  --secondary-foreground: oklch(0.96 0.008 87);
+  --muted: oklch(0.29 0.016 88);
+  --muted-foreground: oklch(0.72 0.016 86);
+  --accent: oklch(0.31 0.018 88);
+  --accent-foreground: oklch(0.96 0.008 87);
+
+  --border: oklch(0.96 0.008 87 / 12%);
+  --input: oklch(0.96 0.008 87 / 18%);
+  --ring: oklch(0.6 0.08 152);
+  --destructive: oklch(0.68 0.17 27);
+  --destructive-foreground: oklch(0.96 0.008 87);
+
+  --exito: oklch(0.66 0.11 145);
+  --exito-suave: oklch(0.66 0.11 145 / 18%);
+  --exito-fuerte: oklch(0.78 0.1 145);
+  --alerta: oklch(0.78 0.14 82);
+  --alerta-suave: oklch(0.78 0.14 82 / 18%);
+  --alerta-fuerte: oklch(0.84 0.12 84);
+  --peligro: oklch(0.66 0.14 46);
+  --peligro-suave: oklch(0.66 0.14 46 / 18%);
+  --peligro-fuerte: oklch(0.78 0.12 48);
+  --neutro: oklch(0.7019 0.0276 85);
+  --neutro-suave: oklch(0.7019 0.0276 85 / 18%);
+  --neutro-fuerte: oklch(0.8 0.02 85);
+  --info: oklch(0.68 0.09 235);
+  --info-suave: oklch(0.68 0.09 235 / 18%);
+  --info-fuerte: oklch(0.8 0.08 235);
+
+  --chart-1: oklch(0.66 0.1 150);
+  --chart-2: oklch(0.78 0.14 82);
+  --chart-3: oklch(0.68 0.13 46);
+  --chart-4: oklch(0.68 0.09 235);
+  --chart-5: oklch(0.62 0.085 340);
+
+  --sidebar: oklch(0.22 0.014 88);
+  --sidebar-foreground: oklch(0.96 0.008 87);
+  --sidebar-primary: oklch(0.72 0.09 152);
+  --sidebar-primary-foreground: oklch(0.19 0.012 88);
+  --sidebar-accent: oklch(0.29 0.016 88);
+  --sidebar-accent-foreground: oklch(0.82 0.08 152);
+  --sidebar-border: oklch(0.96 0.008 87 / 12%);
+  --sidebar-ring: oklch(0.6 0.08 152);
 }
 
 @layer base {
@@ -127,4 +220,39 @@
   html {
     @apply font-sans;
   }
+  h1,
+  h2,
+  h3 {
+    @apply font-heading;
+  }
+  /* Los números de tablas y métricas siempre alineados en columna */
+  table,
+  [data-slot="table"] {
+    font-variant-numeric: tabular-nums;
+  }
+}
+
+/*
+  Popups y controles de Mapbox.
+  El HTML del popup se inyecta con setHTML(), así que Tailwind no escanea
+  esas clases: el estilo tiene que vivir aquí, no en el string.
+*/
+.popup-ranch .mapboxgl-popup-content {
+  @apply rounded-lg bg-popover px-3 py-2 font-sans text-sm text-popover-foreground shadow-lg ring-1 ring-border;
+}
+.popup-ranch .mapboxgl-popup-tip {
+  border-top-color: var(--popover);
+  border-bottom-color: var(--popover);
+}
+.popup-ranch .popup-titulo {
+  @apply font-heading text-sm font-semibold;
+}
+.popup-ranch .popup-dato {
+  @apply text-xs text-muted-foreground;
+}
+.popup-ranch .popup-enlace {
+  @apply text-xs font-medium text-primary underline underline-offset-2;
+}
+.mapboxgl-ctrl-group {
+  @apply rounded-lg shadow-none ring-1 ring-border;
 }

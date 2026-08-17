@@ -2,6 +2,9 @@
 
 import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
+import { GRAFICAS_HEX, MARCA, SEMAFORO } from "@/lib/colores";
+import { estadoPotrero } from "@/lib/estados";
+import { SelectCampo } from "@/components/ui/select-campo";
 import mapboxgl from "mapbox-gl";
 import MapboxDraw from "@mapbox/mapbox-gl-draw";
 import area from "@turf/area";
@@ -31,17 +34,10 @@ export type PuntoMapa = {
   geom: GeoJSON.Feature | null;
 };
 
-const COLORES = {
-  ocupado: "#f97316",
-  descansando: "#f59e0b",
-  listo: "#22c55e",
-  sinDatos: "#94a3b8",
-};
-
+// Mapbox usa su propio parser de color y no entiende oklch():
+// los valores vienen en hex desde src/lib/colores.ts.
 function colorDe(p: PotreroMapa, meta: number): string {
-  if (p.ocupado) return COLORES.ocupado;
-  if (p.dias_descanso == null) return COLORES.sinDatos;
-  return p.dias_descanso >= meta ? COLORES.listo : COLORES.descansando;
+  return SEMAFORO[estadoPotrero(p.dias_descanso, meta, p.ocupado).clave].hex;
 }
 
 export function MapaRancho({
@@ -148,8 +144,8 @@ export function MapaRancho({
           "text-size": 12,
         },
         paint: {
-          "text-color": "#ffffff",
-          "text-halo-color": "#000000",
+          "text-color": MARCA.hueso,
+          "text-halo-color": MARCA.tinta,
           "text-halo-width": 1,
         },
       });
@@ -165,11 +161,11 @@ export function MapaRancho({
             "match",
             ["get", "tipo"],
             "pluviometro",
-            "#38bdf8",
-            "#e2e8f0",
+            GRAFICAS_HEX[3],
+            MARCA.hueso,
           ],
           "circle-stroke-width": 1.5,
-          "circle-stroke-color": "#0f172a",
+          "circle-stroke-color": MARCA.tinta,
         },
       });
       map.addLayer({
@@ -182,8 +178,8 @@ export function MapaRancho({
           "text-offset": [0, 1.1],
         },
         paint: {
-          "text-color": "#ffffff",
-          "text-halo-color": "#000000",
+          "text-color": MARCA.hueso,
+          "text-halo-color": MARCA.tinta,
           "text-halo-width": 1,
         },
       });
@@ -214,14 +210,14 @@ export function MapaRancho({
           has: number | null;
           estado: string;
         };
-        new mapboxgl.Popup()
+        new mapboxgl.Popup({ className: "popup-ranch", closeButton: false })
           .setLngLat(e.lngLat)
           .setHTML(
-            `<div style="font-family:inherit;color:#111">
-              <strong>${props.nombre}</strong><br/>
-              ${props.has ? `${Number(props.has).toFixed(1)} has<br/>` : ""}
-              ${props.estado}<br/>
-              <a href="/potreros/${props.id}" style="text-decoration:underline">Ver ficha</a>
+            `<div>
+              <p class="popup-titulo">${props.nombre}</p>
+              ${props.has ? `<p class="popup-dato">${Number(props.has).toFixed(1)} has</p>` : ""}
+              <p class="popup-dato">${props.estado}</p>
+              <a class="popup-enlace" href="/potreros/${props.id}">Ver ficha</a>
             </div>`
           )
           .addTo(map);
@@ -328,13 +324,13 @@ export function MapaRancho({
         )}
       </div>
 
-      <div className="absolute bottom-3 left-3 z-10 rounded-md bg-background/90 p-2 text-xs shadow">
+      <div className="absolute bottom-3 left-3 z-10 rounded-lg bg-card/95 p-2 text-xs ring-1 ring-border backdrop-blur">
         <div className="flex items-center gap-3">
           {[
-            ["Ocupado", COLORES.ocupado],
-            [`Descansando (<${meta}d)`, COLORES.descansando],
-            ["Listo", COLORES.listo],
-            ["Sin datos", COLORES.sinDatos],
+            ["Ocupado", SEMAFORO.ocupado.hex],
+            [`Descansando (<${meta}d)`, SEMAFORO.descansando.hex],
+            ["Listo", SEMAFORO.listo.hex],
+            ["Sin datos", SEMAFORO.sinDatos.hex],
           ].map(([texto, color]) => (
             <span key={texto} className="flex items-center gap-1">
               <span
@@ -348,12 +344,12 @@ export function MapaRancho({
       </div>
 
       {modo === "dibujar" && !pendiente && (
-        <p className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-md bg-background/90 px-3 py-1.5 text-sm shadow">
+        <p className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-lg bg-card/95 px-3 py-1.5 text-sm ring-1 ring-border backdrop-blur">
           Haz clic en el mapa para trazar el potrero; doble clic para terminar.
         </p>
       )}
       {modo === "punto" && !pendiente && (
-        <p className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-md bg-background/90 px-3 py-1.5 text-sm shadow">
+        <p className="absolute left-1/2 top-3 z-10 -translate-x-1/2 rounded-lg bg-card/95 px-3 py-1.5 text-sm ring-1 ring-border backdrop-blur">
           Haz clic donde está el pluviómetro, bebedero, corral…
         </p>
       )}
@@ -368,17 +364,16 @@ export function MapaRancho({
               {sinGeom.length > 0 && (
                 <div className="space-y-1">
                   <Label className="text-xs">Asignar a potrero existente</Label>
-                  <select
+                  <SelectCampo
                     name="potrero_id"
-                    className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                  >
-                    <option value="">— Crear potrero nuevo —</option>
-                    {sinGeom.map((p) => (
-                      <option key={p.id} value={p.id}>
-                        {p.nombre}
-                      </option>
-                    ))}
-                  </select>
+                    size="sm"
+                    opcionVacia="— Crear potrero nuevo —"
+                    placeholder="— Crear potrero nuevo —"
+                    opciones={sinGeom.map((p) => ({
+                      valor: p.id,
+                      etiqueta: p.nombre,
+                    }))}
+                  />
                 </div>
               )}
               <div className="space-y-1">
@@ -399,26 +394,29 @@ export function MapaRancho({
             <form action={guardarPuntoNuevo} className="space-y-3">
               <div className="space-y-1">
                 <Label className="text-xs">¿Qué es?</Label>
-                <select
+                <SelectCampo
                   name="capa"
-                  className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                >
-                  <option value="pluviometro">Pluviómetro</option>
-                  <option value="infraestructura">Infraestructura</option>
-                </select>
+                  size="sm"
+                  opcionVacia={false}
+                  defaultValue="pluviometro"
+                  opciones={[
+                    { valor: "pluviometro", etiqueta: "Pluviómetro" },
+                    { valor: "infraestructura", etiqueta: "Infraestructura" },
+                  ]}
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Tipo (infraestructura)</Label>
-                <select
+                <SelectCampo
                   name="tipo"
-                  className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                >
-                  {TIPOS_INFRAESTRUCTURA.map((t) => (
-                    <option key={t.valor} value={t.valor}>
-                      {t.etiqueta}
-                    </option>
-                  ))}
-                </select>
+                  size="sm"
+                  opcionVacia={false}
+                  defaultValue={TIPOS_INFRAESTRUCTURA[0].valor}
+                  opciones={TIPOS_INFRAESTRUCTURA.map((ti) => ({
+                    valor: ti.valor,
+                    etiqueta: ti.etiqueta,
+                  }))}
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Nombre</Label>

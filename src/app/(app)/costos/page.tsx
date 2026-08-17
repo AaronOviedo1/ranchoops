@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Trash2 } from "lucide-react";
+import { Plus, Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import {
@@ -11,20 +11,14 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TablaResponsiva } from "@/components/tabla-responsiva";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { CATEGORIAS_GASTO, formatoFecha, formatoMoneda } from "@/lib/catalogos";
 import { crearGasto, eliminarGasto } from "./acciones";
+import { SelectCampo } from "@/components/ui/select-campo";
 
 export const metadata = { title: "Costos — RanchOps" };
 
@@ -118,16 +112,15 @@ export default async function CostosPage({ searchParams }: PageProps<"/costos">)
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Categoría</Label>
-                  <select
+                  <SelectCampo
                     name="categoria"
-                    className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                  >
-                    {CATEGORIAS_GASTO.map((c) => (
-                      <option key={c} value={c}>
-                        {c}
-                      </option>
-                    ))}
-                  </select>
+                    opcionVacia={false}
+                    defaultValue={CATEGORIAS_GASTO[0]}
+                    opciones={CATEGORIAS_GASTO.map((c) => ({
+                      valor: c,
+                      etiqueta: c,
+                    }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="proveedor-g">Proveedor</Label>
@@ -135,31 +128,23 @@ export default async function CostosPage({ searchParams }: PageProps<"/costos">)
                 </div>
                 <div className="space-y-2">
                   <Label>División</Label>
-                  <select
+                  <SelectCampo
                     name="division_id"
-                    className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                  >
-                    <option value="">—</option>
-                    {(divisiones ?? []).map((d) => (
-                      <option key={d.id} value={d.id}>
-                        {d.nombre}
-                      </option>
-                    ))}
-                  </select>
+                    opciones={(divisiones ?? []).map((d) => ({
+                      valor: d.id,
+                      etiqueta: d.nombre,
+                    }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label>Grupo</Label>
-                  <select
+                  <SelectCampo
                     name="grupo_id"
-                    className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                  >
-                    <option value="">—</option>
-                    {(grupos ?? []).map((g) => (
-                      <option key={g.id} value={g.id}>
-                        {g.nombre}
-                      </option>
-                    ))}
-                  </select>
+                    opciones={(grupos ?? []).map((g) => ({
+                      valor: g.id,
+                      etiqueta: g.nombre,
+                    }))}
+                  />
                 </div>
               </div>
               <div className="space-y-2">
@@ -232,52 +217,74 @@ export default async function CostosPage({ searchParams }: PageProps<"/costos">)
       )}
 
       {(gastosMes ?? []).length === 0 ? (
-        <EmptyState emoji="🧾" titulo={`Sin gastos en ${nombreMes}`} />
+        <EmptyState icono={Receipt} titulo={`Sin gastos en ${nombreMes}`} />
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Concepto</TableHead>
-                <TableHead className="hidden sm:table-cell">Categoría</TableHead>
-                <TableHead className="hidden md:table-cell">Proveedor</TableHead>
-                <TableHead className="hidden lg:table-cell">División</TableHead>
-                <TableHead className="text-right">Monto</TableHead>
-                <TableHead className="w-10" />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {gastosMes!.map((g) => (
-                <TableRow key={g.id}>
-                  <TableCell className="whitespace-nowrap">{formatoFecha(g.fecha)}</TableCell>
-                  <TableCell className="max-w-56 truncate font-medium">{g.concepto}</TableCell>
-                  <TableCell className="hidden sm:table-cell">{g.categoria}</TableCell>
-                  <TableCell className="hidden md:table-cell">{g.proveedor ?? "—"}</TableCell>
-                  <TableCell className="hidden lg:table-cell">
-                    {(g.divisiones as unknown as { nombre: string } | null)?.nombre ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
-                    {formatoMoneda(Number(g.monto))}
-                  </TableCell>
-                  <TableCell>
-                    <form action={eliminarGasto.bind(null, g.id)}>
-                      <Button
-                        type="submit"
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-muted-foreground"
-                        title="Eliminar"
-                      >
-                        <Trash2 className="h-4 w-4" />
-                      </Button>
-                    </form>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <TablaResponsiva
+          datos={gastosMes!}
+          claveDe={(g) => g.id}
+          columnas={[
+            {
+              clave: "concepto",
+              encabezado: "Concepto",
+              enTarjeta: "titulo",
+              celda: (g) => g.concepto,
+            },
+            {
+              clave: "fecha",
+              encabezado: "Fecha",
+              enTarjeta: "subtitulo",
+              celda: (g) => formatoFecha(g.fecha),
+            },
+            {
+              clave: "monto",
+              encabezado: "Monto",
+              numerica: true,
+              enTarjeta: "estado",
+              celda: (g) => (
+                <span className="font-heading font-semibold tabular-nums">
+                  {formatoMoneda(Number(g.monto))}
+                </span>
+              ),
+            },
+            {
+              clave: "categoria",
+              encabezado: "Categoría",
+              desde: "sm",
+              celda: (g) => g.categoria,
+            },
+            {
+              clave: "proveedor",
+              encabezado: "Proveedor",
+              desde: "md",
+              celda: (g) => g.proveedor ?? "—",
+            },
+            {
+              clave: "division",
+              encabezado: "División",
+              desde: "lg",
+              celda: (g) =>
+                (g.divisiones as unknown as { nombre: string } | null)?.nombre ?? "—",
+            },
+            {
+              clave: "acciones",
+              encabezado: <span className="sr-only">Acciones</span>,
+              enTarjeta: "oculto",
+              celda: (g) => (
+                <form action={eliminarGasto.bind(null, g.id)}>
+                  <Button
+                    type="submit"
+                    variant="ghost"
+                    size="icon"
+                    className="size-7 text-muted-foreground"
+                    title="Eliminar"
+                  >
+                    <Trash2 className="size-4" />
+                  </Button>
+                </form>
+              ),
+            },
+          ]}
+        />
       )}
     </div>
   );

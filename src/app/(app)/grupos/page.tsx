@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Boxes, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,6 +16,8 @@ import { EmptyState, PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { crearGrupo } from "./acciones";
+import { Aviso } from "@/components/aviso";
+import { SelectCampo } from "@/components/ui/select-campo";
 
 export const metadata = { title: "Grupos — RanchOps" };
 
@@ -68,17 +70,13 @@ export default async function GruposPage({ searchParams }: PageProps<"/grupos">)
           </div>
           <div className="space-y-2">
             <Label>División</Label>
-            <select
+            <SelectCampo
               name="division_id"
-              className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-            >
-              <option value="">—</option>
-              {(divisiones ?? []).map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.nombre}
-                </option>
-              ))}
-            </select>
+              opciones={(divisiones ?? []).map((d) => ({
+                valor: d.id,
+                etiqueta: d.nombre,
+              }))}
+            />
           </div>
           <Button type="submit" className="w-full">
             Crear grupo
@@ -95,12 +93,12 @@ export default async function GruposPage({ searchParams }: PageProps<"/grupos">)
       </PageHeader>
 
       {error && (
-        <p className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p>
+        <Aviso tono="peligro" className="mb-4">{error}</Aviso>
       )}
 
       {(grupos ?? []).length === 0 ? (
         <EmptyState
-          emoji="🐮"
+          icono={Boxes}
           titulo="Sin grupos"
           descripcion='Crea tu primer grupo, por ejemplo "Vacas paridas" o "Vaquillas 2026".'
         />

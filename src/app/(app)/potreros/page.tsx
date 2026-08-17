@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Map as MapIcon, Plus } from "lucide-react";
+import { Fence, Map as MapIcon, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -11,30 +11,18 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TablaResponsiva } from "@/components/tabla-responsiva";
 import { EmptyState, PageHeader } from "@/components/page-header";
+import { EstadoBadge } from "@/components/estado-badge";
+import { Aviso } from "@/components/aviso";
+import { estadoPotrero } from "@/lib/estados";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { formatoFecha, formatoNumero } from "@/lib/catalogos";
 import type { PotreroEstado } from "@/lib/tipos";
-import { cn } from "@/lib/utils";
 import { crearPotrero } from "./acciones";
 
 export const metadata = { title: "Potreros — RanchOps" };
-
-function claseDescanso(dias: number | null, meta: number, ocupado: boolean) {
-  if (ocupado) return "bg-orange-100 text-orange-800 dark:bg-orange-950 dark:text-orange-300";
-  if (dias == null) return "bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300";
-  if (dias >= meta) return "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300";
-  return "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300";
-}
 
 export default async function PotrerosPage({
   searchParams,
@@ -115,79 +103,74 @@ export default async function PotrerosPage({
       </PageHeader>
 
       {error && (
-        <p className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p>
+        <Aviso tono="peligro" className="mb-4">{error}</Aviso>
       )}
 
       {lista.length === 0 ? (
         <EmptyState
-          emoji="🌾"
+          icono={Fence}
           titulo="Sin potreros"
           descripcion="Crea tus potreros aquí o dibújalos directamente en el mapa."
         />
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Potrero</TableHead>
-                <TableHead>Has</TableHead>
-                <TableHead>Estado</TableHead>
-                <TableHead className="hidden sm:table-cell">Grupo</TableHead>
-                <TableHead className="hidden md:table-cell">Desde / última salida</TableHead>
-                <TableHead>Días</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lista.map((p) => {
-                const ocupado = !!p.grupo_actual_id;
-                return (
-                  <TableRow key={p.potrero_id} className="relative">
-                    <TableCell className="font-medium">
-                      <Link
-                        href={`/potreros/${p.potrero_id}`}
-                        className="after:absolute after:inset-0"
-                      >
-                        {p.nombre}
-                      </Link>
-                    </TableCell>
-                    <TableCell>{formatoNumero(p.superficie_has, 1)}</TableCell>
-                    <TableCell>
-                      <span
-                        className={cn(
-                          "rounded-full px-2 py-0.5 text-xs font-medium",
-                          claseDescanso(p.dias_descanso, meta, ocupado)
-                        )}
-                      >
-                        {ocupado
-                          ? "Ocupado"
-                          : p.dias_descanso == null
-                            ? "Sin historial"
-                            : (p.dias_descanso >= meta ? "Listo" : "Descansando")}
-                      </span>
-                    </TableCell>
-                    <TableCell className="hidden sm:table-cell">
-                      {ocupado ? nombreGrupo.get(p.grupo_actual_id!) ?? "—" : "—"}
-                    </TableCell>
-                    <TableCell className="hidden md:table-cell">
-                      {ocupado
-                        ? formatoFecha(p.ocupado_desde)
-                        : formatoFecha(p.ultima_salida)}
-                    </TableCell>
-                    <TableCell>
-                      {ocupado ? (
-                        <Badge variant="outline">{p.dias_ocupado} ocupado</Badge>
-                      ) : p.dias_descanso != null ? (
-                        <Badge variant="outline">{p.dias_descanso} descanso</Badge>
-                      ) : (
-                        "—"
-                      )}
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </div>
+        <TablaResponsiva
+          datos={lista}
+          claveDe={(p) => p.potrero_id}
+          hrefDe={(p) => `/potreros/${p.potrero_id}`}
+          columnas={[
+            {
+              clave: "nombre",
+              encabezado: "Potrero",
+              enTarjeta: "titulo",
+              celda: (p) => p.nombre,
+            },
+            {
+              clave: "estado",
+              encabezado: "Estado",
+              enTarjeta: "estado",
+              celda: (p) => {
+                const e = estadoPotrero(p.dias_descanso, meta, !!p.grupo_actual_id);
+                return <EstadoBadge tono={e.tono}>{e.etiqueta}</EstadoBadge>;
+              },
+            },
+            {
+              clave: "has",
+              encabezado: "Has",
+              numerica: true,
+              celda: (p) => formatoNumero(p.superficie_has, 1),
+            },
+            {
+              clave: "grupo",
+              encabezado: "Grupo",
+              desde: "sm",
+              celda: (p) =>
+                p.grupo_actual_id
+                  ? (nombreGrupo.get(p.grupo_actual_id) ?? "—")
+                  : "—",
+            },
+            {
+              clave: "fecha",
+              encabezado: "Desde / última salida",
+              desde: "md",
+              celda: (p) =>
+                p.grupo_actual_id
+                  ? formatoFecha(p.ocupado_desde)
+                  : formatoFecha(p.ultima_salida),
+            },
+            {
+              clave: "dias",
+              encabezado: "Días",
+              celda: (p) =>
+                p.grupo_actual_id ? (
+                  <Badge variant="outline">{p.dias_ocupado} ocupado</Badge>
+                ) : p.dias_descanso != null ? (
+                  <Badge variant="outline">{p.dias_descanso} descanso</Badge>
+                ) : (
+                  "—"
+                ),
+            },
+          ]}
+        />
       )}
     </div>
   );

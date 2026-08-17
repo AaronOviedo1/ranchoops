@@ -1,3 +1,4 @@
+import { NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -7,6 +8,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { formatoFecha } from "@/lib/catalogos";
 import { registrarNota } from "../trabajos/acciones";
+import { SelectCampo } from "@/components/ui/select-campo";
 
 export const metadata = { title: "Bitácora — RanchOps" };
 
@@ -53,17 +55,16 @@ export default async function BitacoraPage() {
           <form action={registrarNota} className="space-y-3">
             <div className="flex flex-wrap gap-3">
               <Input name="fecha" type="date" defaultValue={hoy} className="w-40" required />
-              <select
+              <SelectCampo
                 name="grupo_id"
-                className="border-input h-9 rounded-md border bg-transparent px-3 text-sm"
-              >
-                <option value="">Sin grupo</option>
-                {(grupos ?? []).map((g) => (
-                  <option key={g.id} value={g.id}>
-                    {g.nombre}
-                  </option>
-                ))}
-              </select>
+                opcionVacia="Sin grupo"
+                placeholder="Sin grupo"
+                className="w-44"
+                opciones={(grupos ?? []).map((g) => ({
+                  valor: g.id,
+                  etiqueta: g.nombre,
+                }))}
+              />
             </div>
             <Textarea
               name="obs"
@@ -77,7 +78,7 @@ export default async function BitacoraPage() {
       </Card>
 
       {(notas ?? []).length === 0 ? (
-        <EmptyState emoji="📓" titulo="La bitácora está vacía" />
+        <EmptyState icono={NotebookPen} titulo="La bitácora está vacía" />
       ) : (
         <div className="space-y-6">
           {[...porMes.entries()].map(([mes, items]) => (

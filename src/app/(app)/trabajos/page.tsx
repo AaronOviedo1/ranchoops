@@ -1,15 +1,8 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Plus, Syringe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TablaResponsiva } from "@/components/tabla-responsiva";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
@@ -40,7 +33,7 @@ export default async function TrabajosPage() {
 
       {(eventos ?? []).length === 0 ? (
         <EmptyState
-          emoji="💉"
+          icono={Syringe}
           titulo="Sin trabajos registrados"
           descripcion="Registra vacunaciones, palpaciones, pesajes y más; cada trabajo queda en el historial de los animales."
         >
@@ -49,49 +42,68 @@ export default async function TrabajosPage() {
           </Button>
         </EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Trabajo</TableHead>
-                <TableHead>Grupo</TableHead>
-                <TableHead>Animales</TableHead>
-                <TableHead className="hidden sm:table-cell">Producto</TableHead>
-                <TableHead className="hidden md:table-cell">Costo</TableHead>
-                <TableHead className="hidden lg:table-cell">Obs.</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {eventos!.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell className="whitespace-nowrap">{formatoFecha(e.fecha)}</TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{etiquetaTrabajo(e.tipo)}</Badge>
-                  </TableCell>
-                  <TableCell>
-                    {(e.grupos as { nombre: string } | null)?.nombre ?? "—"}
-                  </TableCell>
-                  <TableCell>
-                    {(e.evento_animales as { count: number }[] | null)?.[0]?.count ?? 0}
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    {(e.productos as { nombre: string } | null)?.nombre ?? "—"}
-                    {e.dosis && (
-                      <span className="text-xs text-muted-foreground"> ({e.dosis})</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    {formatoMoneda(e.costo_total)}
-                  </TableCell>
-                  <TableCell className="hidden max-w-64 truncate lg:table-cell">
-                    {e.resultado ?? e.obs ?? "—"}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <TablaResponsiva
+          datos={eventos!}
+          claveDe={(e) => e.id}
+          columnas={[
+            {
+              clave: "tipo",
+              encabezado: "Trabajo",
+              enTarjeta: "titulo",
+              celda: (e) => (
+                <Badge variant="outline">{etiquetaTrabajo(e.tipo)}</Badge>
+              ),
+            },
+            {
+              clave: "fecha",
+              encabezado: "Fecha",
+              enTarjeta: "subtitulo",
+              celda: (e) => formatoFecha(e.fecha),
+            },
+            {
+              clave: "grupo",
+              encabezado: "Grupo",
+              celda: (e) =>
+                (e.grupos as { nombre: string } | null)?.nombre ?? "—",
+            },
+            {
+              clave: "animales",
+              encabezado: "Animales",
+              numerica: true,
+              celda: (e) =>
+                (e.evento_animales as { count: number }[] | null)?.[0]?.count ?? 0,
+            },
+            {
+              clave: "producto",
+              encabezado: "Producto",
+              desde: "sm",
+              celda: (e) => (
+                <>
+                  {(e.productos as { nombre: string } | null)?.nombre ?? "—"}
+                  {e.dosis && (
+                    <span className="text-xs text-muted-foreground">
+                      {" "}
+                      ({e.dosis})
+                    </span>
+                  )}
+                </>
+              ),
+            },
+            {
+              clave: "costo",
+              encabezado: "Costo",
+              numerica: true,
+              desde: "md",
+              celda: (e) => formatoMoneda(e.costo_total),
+            },
+            {
+              clave: "obs",
+              encabezado: "Obs.",
+              desde: "lg",
+              celda: (e) => e.resultado ?? e.obs ?? "—",
+            },
+          ]}
+        />
       )}
     </div>
   );

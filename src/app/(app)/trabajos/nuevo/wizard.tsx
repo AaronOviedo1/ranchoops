@@ -9,6 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { TIPOS_TRABAJO } from "@/lib/catalogos";
 import { cn } from "@/lib/utils";
+import { Aviso } from "@/components/aviso";
+import { SelectCampo } from "@/components/ui/select-campo";
 
 type AnimalMini = {
   id: string;
@@ -93,7 +95,7 @@ export function WizardTrabajo({
   return (
     <div className="mx-auto max-w-2xl">
       {error && (
-        <p className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p>
+        <Aviso tono="peligro" className="mb-4">{error}</Aviso>
       )}
 
       <div className="mb-4 flex items-center gap-2 text-sm text-muted-foreground">
@@ -248,17 +250,15 @@ export function WizardTrabajo({
             <div className="grid grid-cols-2 gap-4 rounded-md border p-3">
               <div className="col-span-2 space-y-2">
                 <Label>Producto (descuenta inventario)</Label>
-                <select
+                <SelectCampo
                   name="producto_id"
-                  className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                >
-                  <option value="">Sin producto</option>
-                  {productos.map((p) => (
-                    <option key={p.id} value={p.id}>
-                      {p.nombre} ({p.unidad})
-                    </option>
-                  ))}
-                </select>
+                  opcionVacia="Sin producto"
+                  placeholder="Sin producto"
+                  opciones={productos.map((p) => ({
+                    valor: p.id,
+                    etiqueta: `${p.nombre} (${p.unidad})`,
+                  }))}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="cantidad">Cantidad usada</Label>

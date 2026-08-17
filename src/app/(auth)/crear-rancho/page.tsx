@@ -9,6 +9,8 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { crearRancho } from "./actions";
+import { Aviso } from "@/components/aviso";
+import { LogoRanchOps } from "@/components/marca";
 
 export const metadata = { title: "Crear rancho — RanchOps" };
 
@@ -19,9 +21,15 @@ export default async function CrearRanchoPage({
   const error = typeof params.error === "string" ? params.error : null;
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
+      {/* Tierra al amanecer: un halo cálido detrás de la tarjeta */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--color-marca-suave),transparent_60%)]"
+      />
+      <Card className="relative w-full max-w-sm shadow-lg">
+        <CardHeader className="items-center gap-2 text-center">
+          <LogoRanchOps variante="duotono" className="size-10 text-primary" />
           <CardTitle className="text-xl">Crea tu rancho</CardTitle>
           <CardDescription>
             Se crearán las divisiones (Pie de cría, Repasto, Engorda) y el
@@ -30,9 +38,7 @@ export default async function CrearRanchoPage({
         </CardHeader>
         <CardContent>
           {error && (
-            <p className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </p>
+            <Aviso tono="peligro" className="mb-4">{error}</Aviso>
           )}
           <form action={crearRancho} className="space-y-4">
             <div className="space-y-2">

@@ -16,6 +16,7 @@ import { Label } from "@/components/ui/label";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { RESIDUOS } from "@/lib/catalogos";
+import { SelectCampo } from "@/components/ui/select-campo";
 
 type AnimalMini = {
   id: string;
@@ -169,18 +170,16 @@ export function DialogoMoverPotrero({
           </div>
           <div className="space-y-2">
             <Label>Potrero destino</Label>
-            <select
+            <SelectCampo
               name="potrero_id"
-              className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-            >
-              <option value="">Sin potrero (solo salida)</option>
-              {potreros.map((p) => (
-                <option key={p.id} value={p.id} disabled={p.id === potreroActual}>
-                  {p.nombre}
-                  {p.id === potreroActual ? " (actual)" : ""}
-                </option>
-              ))}
-            </select>
+              opcionVacia="Sin potrero (solo salida)"
+              placeholder="Sin potrero (solo salida)"
+              opciones={potreros.map((p) => ({
+                valor: p.id,
+                etiqueta: `${p.nombre}${p.id === potreroActual ? " (actual)" : ""}`,
+                deshabilitada: p.id === potreroActual,
+              }))}
+            />
           </div>
           {potreroActual && (
             <div className="grid grid-cols-2 gap-4">
@@ -190,17 +189,10 @@ export function DialogoMoverPotrero({
               </div>
               <div className="space-y-2">
                 <Label>Residuo</Label>
-                <select
+                <SelectCampo
                   name="residuo"
-                  className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                >
-                  <option value="">—</option>
-                  {RESIDUOS.map((r) => (
-                    <option key={r} value={r}>
-                      {r}
-                    </option>
-                  ))}
-                </select>
+                  opciones={RESIDUOS.map((r) => ({ valor: r, etiqueta: r }))}
+                />
               </div>
             </div>
           )}

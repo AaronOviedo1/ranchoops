@@ -7,7 +7,7 @@ export default function InstalacionPage() {
     <main className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
       <Card className="w-full max-w-lg">
         <CardHeader>
-          <CardTitle>🐄 RanchOps — falta configurar Supabase</CardTitle>
+          <CardTitle>RanchOps — falta configurar Supabase</CardTitle>
         </CardHeader>
         <CardContent className="space-y-3 text-sm">
           <p>Para que la app funcione necesitas:</p>

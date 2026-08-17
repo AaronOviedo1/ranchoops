@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { CloudRain, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
@@ -127,7 +127,7 @@ export default async function LluviasPage({
 
       {(pluviometros ?? []).length === 0 ? (
         <EmptyState
-          emoji="🌧️"
+          icono={CloudRain}
           titulo="Sin pluviómetros"
           descripcion="Crea tus pluviómetros (usualmente uno por zona del rancho) para empezar a registrar lluvias."
         />
@@ -183,7 +183,7 @@ export default async function LluviasPage({
                   key={a}
                   href={`/lluvias?anio=${a}`}
                   className={`rounded-full border px-3 py-1 text-sm ${
-                    a === anio ? "border-primary bg-accent font-medium" : ""
+                    a === anio ? "border-primary bg-primary/8 font-medium text-primary" : ""
                   }`}
                 >
                   {a}

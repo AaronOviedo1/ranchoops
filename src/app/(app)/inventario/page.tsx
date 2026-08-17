@@ -1,4 +1,4 @@
-import { AlertTriangle, PackagePlus, Plus } from "lucide-react";
+import { AlertTriangle, Package, PackagePlus, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -12,20 +12,15 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TablaResponsiva } from "@/components/tabla-responsiva";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { TIPOS_PRODUCTO, formatoFecha, formatoMoneda, formatoNumero } from "@/lib/catalogos";
 import type { Existencia } from "@/lib/tipos";
 import { crearProducto, registrarEntrada } from "./acciones";
+import { Aviso } from "@/components/aviso";
+import { SelectCampo } from "@/components/ui/select-campo";
 
 export const metadata = { title: "Inventario — RanchOps" };
 
@@ -83,16 +78,15 @@ export default async function InventarioPage({
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label>Tipo</Label>
-                  <select
+                  <SelectCampo
                     name="tipo"
-                    className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                  >
-                    {TIPOS_PRODUCTO.map((t) => (
-                      <option key={t.valor} value={t.valor}>
-                        {t.etiqueta}
-                      </option>
-                    ))}
-                  </select>
+                    opcionVacia={false}
+                    defaultValue={TIPOS_PRODUCTO[0].valor}
+                    opciones={TIPOS_PRODUCTO.map((tp) => ({
+                      valor: tp.valor,
+                      etiqueta: tp.etiqueta,
+                    }))}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="unidad">Unidad</Label>
@@ -137,18 +131,16 @@ export default async function InventarioPage({
             <form action={registrarEntrada} className="space-y-4">
               <div className="space-y-2">
                 <Label>Producto</Label>
-                <select
+                <SelectCampo
                   name="producto_id"
                   required
-                  className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                >
-                  <option value="">Elegir…</option>
-                  {lista.map((p) => (
-                    <option key={p.producto_id} value={p.producto_id}>
-                      {p.nombre} ({p.unidad})
-                    </option>
-                  ))}
-                </select>
+                  placeholder="Elegir…"
+                  opcionVacia="Elegir…"
+                  opciones={lista.map((p) => ({
+                    valor: p.producto_id,
+                    etiqueta: `${p.nombre} (${p.unidad})`,
+                  }))}
+                />
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
@@ -186,67 +178,80 @@ export default async function InventarioPage({
       </PageHeader>
 
       {error && (
-        <p className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p>
+        <Aviso tono="peligro" className="mb-4">{error}</Aviso>
       )}
 
       {alertas.length > 0 && (
-        <div className="mb-4 flex items-start gap-2 rounded-md border border-amber-300 bg-amber-50 p-3 text-sm dark:border-amber-800 dark:bg-amber-950">
-          <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-amber-600" />
+        <Aviso tono="alerta" icono={AlertTriangle} className="mb-4">
           <p>
             <span className="font-medium">Inventario bajo:</span>{" "}
             {alertas
               .map((a) => `${a.nombre} (${formatoNumero(a.existencia, 1)} de ${formatoNumero(a.stock_minimo, 1)})`)
               .join(", ")}
           </p>
-        </div>
+        </Aviso>
       )}
 
       {lista.length === 0 ? (
-        <EmptyState emoji="📦" titulo="Sin productos" />
+        <EmptyState icono={Package} titulo="Sin productos" />
       ) : (
         <div className="grid gap-4 lg:grid-cols-3">
-          <div className="overflow-x-auto rounded-lg border lg:col-span-2">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Producto</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead className="text-right">Existencia</TableHead>
-                  <TableHead className="hidden text-right sm:table-cell">Costo/u</TableHead>
-                  <TableHead className="hidden text-right md:table-cell">Valor</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {lista.map((p) => {
-                  const bajo = p.stock_minimo != null && p.existencia < p.stock_minimo;
-                  return (
-                    <TableRow key={p.producto_id}>
-                      <TableCell className="font-medium">
-                        {p.nombre}
-                        {bajo && (
-                          <Badge variant="destructive" className="ml-2">
-                            bajo
-                          </Badge>
-                        )}
-                      </TableCell>
-                      <TableCell className="capitalize">{p.tipo}</TableCell>
-                      <TableCell className="text-right tabular-nums">
-                        {formatoNumero(p.existencia, 1)} {p.unidad}
-                      </TableCell>
-                      <TableCell className="hidden text-right tabular-nums sm:table-cell">
-                        {formatoMoneda(p.costo_unitario)}
-                      </TableCell>
-                      <TableCell className="hidden text-right tabular-nums md:table-cell">
-                        {p.costo_unitario != null
-                          ? formatoMoneda(p.costo_unitario * p.existencia)
-                          : "—"}
-                      </TableCell>
-                    </TableRow>
-                  );
-                })}
-              </TableBody>
-            </Table>
-          </div>
+          <TablaResponsiva
+            className="lg:col-span-2"
+            datos={lista}
+            claveDe={(p) => p.producto_id}
+            columnas={[
+              {
+                clave: "nombre",
+                encabezado: "Producto",
+                enTarjeta: "titulo",
+                celda: (p) => (
+                  <>
+                    {p.nombre}
+                    {p.stock_minimo != null && p.existencia < p.stock_minimo && (
+                      <Badge variant="destructive" className="ml-2">
+                        bajo
+                      </Badge>
+                    )}
+                  </>
+                ),
+              },
+              {
+                clave: "tipo",
+                encabezado: "Tipo",
+                enTarjeta: "subtitulo",
+                celda: (p) => <span className="capitalize">{p.tipo}</span>,
+              },
+              {
+                clave: "existencia",
+                encabezado: "Existencia",
+                numerica: true,
+                enTarjeta: "estado",
+                celda: (p) => (
+                  <span className="font-heading font-semibold tabular-nums">
+                    {formatoNumero(p.existencia, 1)} {p.unidad}
+                  </span>
+                ),
+              },
+              {
+                clave: "costo",
+                encabezado: "Costo/u",
+                numerica: true,
+                desde: "sm",
+                celda: (p) => formatoMoneda(p.costo_unitario),
+              },
+              {
+                clave: "valor",
+                encabezado: "Valor",
+                numerica: true,
+                desde: "md",
+                celda: (p) =>
+                  p.costo_unitario != null
+                    ? formatoMoneda(p.costo_unitario * p.existencia)
+                    : "—",
+              },
+            ]}
+          />
 
           <Card>
             <CardHeader>
@@ -270,9 +275,9 @@ export default async function InventarioPage({
                     <span
                       className={
                         m.tipo === "entrada"
-                          ? "font-medium text-green-600"
+                          ? "font-medium text-exito-fuerte"
                           : m.tipo === "salida"
-                            ? "font-medium text-red-600"
+                            ? "font-medium text-peligro-fuerte"
                             : "font-medium"
                       }
                     >

@@ -1,30 +1,16 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { Beef, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TablaResponsiva } from "@/components/tabla-responsiva";
 import { EmptyState, PageHeader } from "@/components/page-header";
+import { EstadoBadge } from "@/components/estado-badge";
+import { estadoAnimal } from "@/lib/estados";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { CLASES_ANIMAL, formatoFecha } from "@/lib/catalogos";
 import type { Animal, Grupo } from "@/lib/tipos";
-import { cn } from "@/lib/utils";
-
-const STATUS_COLORES: Record<string, string> = {
-  activo: "bg-green-100 text-green-800 dark:bg-green-950 dark:text-green-300",
-  vendido: "bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-300",
-  muerto: "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-300",
-  desecho: "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300",
-  transferido: "bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-300",
-};
 
 export const metadata = { title: "Ganado — RanchOps" };
 
@@ -110,7 +96,7 @@ export default async function GanadoPage({
 
       {lista.length === 0 ? (
         <EmptyState
-          emoji="🐄"
+          icono={Beef}
           titulo="Sin animales"
           descripcion="Registra tu primer animal o ajusta los filtros."
         >
@@ -119,58 +105,66 @@ export default async function GanadoPage({
           </Button>
         </EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Arete</TableHead>
-                <TableHead>SINIIGA</TableHead>
-                <TableHead>Clase</TableHead>
-                <TableHead className="hidden sm:table-cell">Raza</TableHead>
-                <TableHead className="hidden md:table-cell">Nacimiento</TableHead>
-                <TableHead className="hidden sm:table-cell">Grupo</TableHead>
-                <TableHead>Status rep.</TableHead>
-                <TableHead>Status</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lista.map((a) => (
-                <TableRow key={a.id} className="relative">
-                  <TableCell className="font-medium">
-                    <Link
-                      href={`/ganado/${a.id}`}
-                      className="after:absolute after:inset-0"
-                    >
-                      #{a.arete_control ?? "s/n"}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs text-muted-foreground">
-                    {a.siniga ?? "—"}
-                  </TableCell>
-                  <TableCell className="capitalize">{a.clase}</TableCell>
-                  <TableCell className="hidden sm:table-cell">{a.raza ?? "—"}</TableCell>
-                  <TableCell className="hidden md:table-cell">
-                    {formatoFecha(a.fecha_nacimiento)}
-                  </TableCell>
-                  <TableCell className="hidden sm:table-cell">
-                    {a.grupos?.nombre ?? "—"}
-                  </TableCell>
-                  <TableCell>{a.status_reproductivo ?? "—"}</TableCell>
-                  <TableCell>
-                    <span
-                      className={cn(
-                        "rounded-full px-2 py-0.5 text-xs font-medium capitalize",
-                        STATUS_COLORES[a.status]
-                      )}
-                    >
-                      {a.status}
-                    </span>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <TablaResponsiva
+          datos={lista}
+          claveDe={(a) => a.id}
+          hrefDe={(a) => `/ganado/${a.id}`}
+          columnas={[
+            {
+              clave: "arete",
+              encabezado: "Arete",
+              enTarjeta: "titulo",
+              celda: (a) => `#${a.arete_control ?? "s/n"}`,
+            },
+            {
+              clave: "siniga",
+              encabezado: "SINIIGA",
+              enTarjeta: "subtitulo",
+              celda: (a) => (
+                <span className="font-mono text-xs text-muted-foreground">
+                  {a.siniga ?? "—"}
+                </span>
+              ),
+            },
+            {
+              clave: "status",
+              encabezado: "Status",
+              enTarjeta: "estado",
+              celda: (a) => {
+                const e = estadoAnimal(a.status);
+                return <EstadoBadge tono={e.tono}>{e.etiqueta}</EstadoBadge>;
+              },
+            },
+            {
+              clave: "clase",
+              encabezado: "Clase",
+              celda: (a) => <span className="capitalize">{a.clase}</span>,
+            },
+            {
+              clave: "raza",
+              encabezado: "Raza",
+              desde: "sm",
+              celda: (a) => a.raza ?? "—",
+            },
+            {
+              clave: "nacimiento",
+              encabezado: "Nacimiento",
+              desde: "md",
+              celda: (a) => formatoFecha(a.fecha_nacimiento),
+            },
+            {
+              clave: "grupo",
+              encabezado: "Grupo",
+              desde: "sm",
+              celda: (a) => a.grupos?.nombre ?? "—",
+            },
+            {
+              clave: "status_rep",
+              encabezado: "Status rep.",
+              celda: (a) => a.status_reproductivo ?? "—",
+            },
+          ]}
+        />
       )}
     </div>
   );

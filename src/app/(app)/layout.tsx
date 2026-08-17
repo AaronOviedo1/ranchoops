@@ -1,8 +1,8 @@
 import { requireRancho } from "@/lib/auth";
-import { BottomNav, SidebarNav } from "@/components/navegacion";
+import { BottomNav, SidebarNav, TituloSeccion } from "@/components/navegacion";
 import { cerrarSesion } from "@/app/(auth)/login/actions";
-import { Button } from "@/components/ui/button";
-import { LogOut } from "lucide-react";
+import { LogoRanchOps } from "@/components/marca";
+import { MenuUsuario } from "@/components/menu-usuario";
 
 export default async function AppLayout({
   children,
@@ -12,23 +12,33 @@ export default async function AppLayout({
   const rancho = await requireRancho();
 
   return (
-    <div className="flex min-h-screen">
-      <SidebarNav nombreRancho={rancho.nombre} />
+    <div className="flex min-h-screen bg-background">
+      <SidebarNav nombreRancho={rancho.nombre}>
+        <MenuUsuario nombreRancho={rancho.nombre} cerrarSesion={cerrarSesion} />
+      </SidebarNav>
+
       <div className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-14 items-center justify-between border-b px-4 md:justify-end">
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-between border-b border-border bg-background/85 px-4 backdrop-blur supports-[backdrop-filter]:bg-background/70 md:px-8">
           <div className="flex items-center gap-2 md:hidden">
-            <span>🐄</span>
-            <span className="text-sm font-semibold">{rancho.nombre}</span>
+            <LogoRanchOps variante="duotono" className="size-6 text-primary" />
+            <span className="truncate font-heading text-sm font-semibold">
+              {rancho.nombre}
+            </span>
           </div>
-          <form action={cerrarSesion}>
-            <Button variant="ghost" size="sm" type="submit" className="text-muted-foreground">
-              <LogOut className="h-4 w-4" />
-              <span className="hidden sm:inline">Salir</span>
-            </Button>
-          </form>
+          <TituloSeccion />
+          <div className="md:hidden">
+            <MenuUsuario
+              nombreRancho={rancho.nombre}
+              cerrarSesion={cerrarSesion}
+            />
+          </div>
         </header>
-        <main className="flex-1 p-4 pb-24 md:p-6 md:pb-6">{children}</main>
+
+        <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 pb-28 md:p-8 md:pb-8">
+          {children}
+        </main>
       </div>
+
       <BottomNav />
     </div>
   );

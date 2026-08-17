@@ -8,6 +8,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CLASES_ANIMAL, formatoMoneda } from "@/lib/catalogos";
+import { Aviso } from "@/components/aviso";
+import { SelectCampo } from "@/components/ui/select-campo";
 
 type Renglon = {
   clase: string;
@@ -79,7 +81,7 @@ export function FormularioVenta({
   return (
     <form action={action} className="max-w-3xl space-y-6">
       {error && (
-        <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p>
+        <Aviso tono="peligro">{error}</Aviso>
       )}
       <input type="hidden" name="renglones" value={renglonesJson} />
       {[...seleccion].map((id) => (
@@ -107,17 +109,14 @@ export function FormularioVenta({
 
       <div className="space-y-2">
         <Label>División</Label>
-        <select
+        <SelectCampo
           name="division_id"
-          className="border-input h-9 w-full max-w-xs rounded-md border bg-transparent px-3 text-sm"
-        >
-          <option value="">—</option>
-          {divisiones.map((d) => (
-            <option key={d.id} value={d.id}>
-              {d.nombre}
-            </option>
-          ))}
-        </select>
+          className="max-w-xs"
+          opciones={divisiones.map((d) => ({
+            valor: d.id,
+            etiqueta: d.nombre,
+          }))}
+        />
       </div>
 
       <div className="space-y-3">
@@ -146,17 +145,15 @@ export function FormularioVenta({
             >
               <div className="space-y-1">
                 <Label className="text-xs">Clase</Label>
-                <select
+                <SelectCampo
                   value={r.clase}
-                  onChange={(e) => setCampo(i, "clase", e.target.value)}
-                  className="border-input h-9 w-full rounded-md border bg-transparent px-2 text-sm"
-                >
-                  {CLASES_ANIMAL.map((c) => (
-                    <option key={c.valor} value={c.plural.toLowerCase()}>
-                      {c.plural}
-                    </option>
-                  ))}
-                </select>
+                  onValueChange={(v) => setCampo(i, "clase", v)}
+                  opcionVacia={false}
+                  opciones={CLASES_ANIMAL.map((c) => ({
+                    valor: c.plural.toLowerCase(),
+                    etiqueta: c.plural,
+                  }))}
+                />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs">Cabezas</Label>

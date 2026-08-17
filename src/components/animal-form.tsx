@@ -4,29 +4,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { CLASES_ANIMAL } from "@/lib/catalogos";
 import type { Animal, Division, Grupo } from "@/lib/tipos";
-
-function SelectNativo({
-  name,
-  defaultValue,
-  children,
-  required,
-}: {
-  name: string;
-  defaultValue?: string | null;
-  children: React.ReactNode;
-  required?: boolean;
-}) {
-  return (
-    <select
-      name={name}
-      defaultValue={defaultValue ?? ""}
-      required={required}
-      className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm shadow-xs outline-none focus-visible:ring-[3px] focus-visible:ring-ring/50"
-    >
-      {children}
-    </select>
-  );
-}
+import { Aviso } from "@/components/aviso";
+import { SelectCampo } from "@/components/ui/select-campo";
 
 export function AnimalForm({
   action,
@@ -46,9 +25,7 @@ export function AnimalForm({
   return (
     <form action={action} className="max-w-2xl space-y-6">
       {error && (
-        <p className="rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-          {error}
-        </p>
+        <Aviso tono="peligro">{error}</Aviso>
       )}
 
       <div className="grid grid-cols-2 gap-4 md:grid-cols-3">
@@ -76,21 +53,27 @@ export function AnimalForm({
         </div>
         <div className="space-y-2">
           <Label>Sexo</Label>
-          <SelectNativo name="sexo" defaultValue={animal?.sexo}>
-            <option value="">—</option>
-            <option value="H">Hembra</option>
-            <option value="M">Macho</option>
-          </SelectNativo>
+          <SelectCampo
+            name="sexo"
+            defaultValue={animal?.sexo}
+            opciones={[
+              { valor: "H", etiqueta: "Hembra" },
+              { valor: "M", etiqueta: "Macho" },
+            ]}
+          />
         </div>
         <div className="space-y-2">
           <Label>Clase</Label>
-          <SelectNativo name="clase" defaultValue={animal?.clase ?? "vaca"} required>
-            {CLASES_ANIMAL.map((c) => (
-              <option key={c.valor} value={c.valor}>
-                {c.etiqueta}
-              </option>
-            ))}
-          </SelectNativo>
+          <SelectCampo
+            name="clase"
+            required
+            opcionVacia={false}
+            defaultValue={animal?.clase ?? "vaca"}
+            opciones={CLASES_ANIMAL.map((c) => ({
+              valor: c.valor,
+              etiqueta: c.etiqueta,
+            }))}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="raza">Raza</Label>
@@ -126,14 +109,14 @@ export function AnimalForm({
         </div>
         <div className="space-y-2">
           <Label>Madre</Label>
-          <SelectNativo name="madre_id" defaultValue={animal?.madre_id}>
-            <option value="">—</option>
-            {madres.map((m) => (
-              <option key={m.id} value={m.id}>
-                #{m.arete_control ?? "s/n"} {m.siniga ? `· ${m.siniga}` : ""}
-              </option>
-            ))}
-          </SelectNativo>
+          <SelectCampo
+            name="madre_id"
+            defaultValue={animal?.madre_id}
+            opciones={madres.map((m) => ({
+              valor: m.id,
+              etiqueta: `#${m.arete_control ?? "s/n"}${m.siniga ? ` · ${m.siniga}` : ""}`,
+            }))}
+          />
         </div>
         <div className="space-y-2">
           <Label htmlFor="padre_texto">Padre / semental</Label>
@@ -155,25 +138,25 @@ export function AnimalForm({
         </div>
         <div className="space-y-2">
           <Label>División</Label>
-          <SelectNativo name="division_id" defaultValue={animal?.division_id}>
-            <option value="">—</option>
-            {divisiones.map((d) => (
-              <option key={d.id} value={d.id}>
-                {d.nombre}
-              </option>
-            ))}
-          </SelectNativo>
+          <SelectCampo
+            name="division_id"
+            defaultValue={animal?.division_id}
+            opciones={divisiones.map((d) => ({
+              valor: d.id,
+              etiqueta: d.nombre,
+            }))}
+          />
         </div>
         <div className="space-y-2">
           <Label>Grupo</Label>
-          <SelectNativo name="grupo_id" defaultValue={animal?.grupo_id}>
-            <option value="">—</option>
-            {grupos.map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.nombre}
-              </option>
-            ))}
-          </SelectNativo>
+          <SelectCampo
+            name="grupo_id"
+            defaultValue={animal?.grupo_id}
+            opciones={grupos.map((g) => ({
+              valor: g.id,
+              etiqueta: g.nombre,
+            }))}
+          />
         </div>
       </div>
 

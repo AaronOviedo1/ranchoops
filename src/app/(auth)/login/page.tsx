@@ -4,12 +4,13 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { iniciarSesion, registrarse } from "./actions";
+import { Aviso } from "@/components/aviso";
+import { Marca } from "@/components/marca";
 
 export const metadata = { title: "Entrar — RanchOps" };
 
@@ -22,20 +23,23 @@ export default async function LoginPage({
   const modo = params.modo === "registro" ? "registro" : "entrar";
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-muted/40 p-4">
-      <Card className="w-full max-w-sm">
-        <CardHeader className="text-center">
-          <CardTitle className="text-2xl">🐄 RanchOps</CardTitle>
+    <main className="relative flex min-h-screen items-center justify-center overflow-hidden bg-background p-4">
+      {/* Tierra al amanecer: un halo cálido detrás de la tarjeta */}
+      <div
+        aria-hidden
+        className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_top,var(--color-marca-suave),transparent_60%)]"
+      />
+      <Card className="relative w-full max-w-sm shadow-lg">
+        <CardHeader className="items-center gap-3 text-center">
+          <Marca orientacion="apilada" tamano="lg" />
           <CardDescription>Administración del rancho ganadero</CardDescription>
         </CardHeader>
         <CardContent>
           {error && (
-            <p className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">
-              {error}
-            </p>
+            <Aviso tono="peligro" className="mb-4">{error}</Aviso>
           )}
           {aviso && (
-            <p className="mb-4 rounded-md bg-primary/10 p-3 text-sm">{aviso}</p>
+            <Aviso tono="info" className="mb-4">{aviso}</Aviso>
           )}
           <Tabs defaultValue={modo}>
             <TabsList className="mb-4 w-full">

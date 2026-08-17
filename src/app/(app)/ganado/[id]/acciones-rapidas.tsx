@@ -14,6 +14,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { SelectCampo } from "@/components/ui/select-campo";
 
 export function DialogoParto({
   action,
@@ -58,14 +59,16 @@ export function DialogoParto({
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Sexo de la cría</Label>
-                <select
+                <SelectCampo
                   name="sexo_cria"
                   required
-                  className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                >
-                  <option value="H">Hembra</option>
-                  <option value="M">Macho</option>
-                </select>
+                  opcionVacia={false}
+                  defaultValue="H"
+                  opciones={[
+                    { valor: "H", etiqueta: "Hembra" },
+                    { valor: "M", etiqueta: "Macho" },
+                  ]}
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="arete_cria">Arete de la cría</Label>
@@ -87,14 +90,15 @@ export function DialogoParto({
           )}
           <div className="space-y-2">
             <Label htmlFor="dificultad">Dificultad de parto</Label>
-            <select
+            <SelectCampo
               name="dificultad"
-              className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-            >
-              <option value="">Sin dificultad</option>
-              <option value="asistido">Asistido</option>
-              <option value="dificil">Difícil</option>
-            </select>
+              opcionVacia="Sin dificultad"
+              placeholder="Sin dificultad"
+              opciones={[
+                { valor: "asistido", etiqueta: "Asistido" },
+                { valor: "dificil", etiqueta: "Difícil" },
+              ]}
+            />
           </div>
           <div className="space-y-2">
             <Label htmlFor="obs">Observaciones</Label>

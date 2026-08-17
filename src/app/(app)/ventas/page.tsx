@@ -1,15 +1,8 @@
 import Link from "next/link";
-import { Plus } from "lucide-react";
+import { HandCoins, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { TablaResponsiva } from "@/components/tabla-responsiva";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
@@ -81,48 +74,61 @@ export default async function VentasPage({ searchParams }: PageProps<"/ventas">)
       </div>
 
       {lista.length === 0 ? (
-        <EmptyState emoji="💰" titulo={`Sin ventas en ${anio}`}>
+        <EmptyState icono={HandCoins} titulo={`Sin ventas en ${anio}`}>
           <Button render={<Link href="/ventas/nueva" />}>
             <Plus className="h-4 w-4" /> Nueva venta
           </Button>
         </EmptyState>
       ) : (
-        <div className="overflow-x-auto rounded-lg border">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fecha</TableHead>
-                <TableHead>Comprador</TableHead>
-                <TableHead className="text-right">Cabezas</TableHead>
-                <TableHead className="hidden text-right sm:table-cell">Kilos</TableHead>
-                <TableHead className="hidden md:table-cell">GUIA / REEMO</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {lista.map((v) => (
-                <TableRow key={v.id} className="relative">
-                  <TableCell className="whitespace-nowrap">
-                    <Link href={`/ventas/${v.id}`} className="after:absolute after:inset-0">
-                      {formatoFecha(v.fecha)}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="font-medium">{v.comprador ?? "—"}</TableCell>
-                  <TableCell className="text-right tabular-nums">{v.cabezas}</TableCell>
-                  <TableCell className="hidden text-right tabular-nums sm:table-cell">
-                    {formatoNumero(v.kilos)}
-                  </TableCell>
-                  <TableCell className="hidden text-xs md:table-cell">
-                    {[v.guia, v.reemo].filter(Boolean).join(" / ") || "—"}
-                  </TableCell>
-                  <TableCell className="text-right font-medium tabular-nums">
-                    {formatoMoneda(v.total)}
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </div>
+        <TablaResponsiva
+          datos={lista}
+          claveDe={(v) => v.id}
+          hrefDe={(v) => `/ventas/${v.id}`}
+          columnas={[
+            {
+              clave: "comprador",
+              encabezado: "Comprador",
+              enTarjeta: "titulo",
+              celda: (v) => v.comprador ?? "—",
+            },
+            {
+              clave: "fecha",
+              encabezado: "Fecha",
+              enTarjeta: "subtitulo",
+              celda: (v) => formatoFecha(v.fecha),
+            },
+            {
+              clave: "total",
+              encabezado: "Total",
+              numerica: true,
+              enTarjeta: "estado",
+              celda: (v) => (
+                <span className="font-heading font-semibold tabular-nums">
+                  {formatoMoneda(v.total)}
+                </span>
+              ),
+            },
+            {
+              clave: "cabezas",
+              encabezado: "Cabezas",
+              numerica: true,
+              celda: (v) => v.cabezas,
+            },
+            {
+              clave: "kilos",
+              encabezado: "Kilos",
+              numerica: true,
+              desde: "sm",
+              celda: (v) => formatoNumero(v.kilos),
+            },
+            {
+              clave: "guia",
+              encabezado: "GUIA / REEMO",
+              desde: "md",
+              celda: (v) => [v.guia, v.reemo].filter(Boolean).join(" / ") || "—",
+            },
+          ]}
+        />
       )}
     </div>
   );

@@ -4,8 +4,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { PageHeader } from "@/components/page-header";
+import { Aviso } from "@/components/aviso";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
+import { SelectCampo } from "@/components/ui/select-campo";
 import {
   actualizarRancho,
   alternarDivision,
@@ -42,12 +44,10 @@ export default async function ConfiguracionPage({
       <PageHeader titulo="Configuración" />
 
       {error && (
-        <p className="mb-4 rounded-md bg-destructive/10 p-3 text-sm text-destructive">{error}</p>
+        <Aviso tono="peligro" className="mb-4">{error}</Aviso>
       )}
       {ok && (
-        <p className="mb-4 rounded-md bg-green-100 p-3 text-sm text-green-800 dark:bg-green-950 dark:text-green-300">
-          Guardado.
-        </p>
+        <Aviso tono="exito" className="mb-4">Guardado.</Aviso>
       )}
 
       <div className="grid gap-4 lg:grid-cols-2">
@@ -68,14 +68,15 @@ export default async function ConfiguracionPage({
                 </div>
                 <div className="space-y-2">
                   <Label>Unidad de lluvia</Label>
-                  <select
+                  <SelectCampo
                     name="unidad_lluvia"
                     defaultValue={rancho.unidad_lluvia}
-                    className="border-input h-9 w-full rounded-md border bg-transparent px-3 text-sm"
-                  >
-                    <option value="in">Pulgadas</option>
-                    <option value="mm">Milímetros</option>
-                  </select>
+                    opcionVacia={false}
+                    opciones={[
+                      { valor: "in", etiqueta: "Pulgadas" },
+                      { valor: "mm", etiqueta: "Milímetros" },
+                    ]}
+                  />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="meta-r">Meta de descanso (días)</Label>
