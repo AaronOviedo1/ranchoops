@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Datos reales del rancho (no subir a repos remotos)
+datos-excel/
+
