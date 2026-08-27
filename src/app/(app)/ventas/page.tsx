@@ -5,14 +5,14 @@ import { Card, CardContent } from "@/components/ui/card";
 import { TablaResponsiva } from "@/components/tabla-responsiva";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
-import { requireRancho } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { formatoFecha, formatoMoneda, formatoNumero } from "@/lib/catalogos";
 
 export const metadata = { title: "Ventas — RanchOps" };
 
 export default async function VentasPage({ searchParams }: PageProps<"/ventas">) {
   const sp = await searchParams;
-  const rancho = await requireRancho();
+  const { rancho } = await requireAdmin();
   const supabase = await createClient();
 
   const anioActual = new Date().getFullYear();

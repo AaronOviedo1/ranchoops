@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
+import { fechaHoy } from "@/lib/fechas";
 
 function campo(formData: FormData, nombre: string): string | null {
   const v = String(formData.get(nombre) ?? "").trim();
@@ -38,7 +39,7 @@ export async function crearVenta(formData: FormData) {
     redirect(`/ventas/nueva?error=${encodeURIComponent("Agrega al menos un renglón")}`);
   }
 
-  const fecha = campo(formData, "fecha") ?? new Date().toISOString().slice(0, 10);
+  const fecha = campo(formData, "fecha") ?? fechaHoy();
 
   const { data: venta, error } = await supabase
     .from("ventas")

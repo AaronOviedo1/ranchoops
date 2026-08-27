@@ -14,7 +14,7 @@ import {
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
-import { requireRancho } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import { formatoFecha, formatoMoneda, formatoNumero } from "@/lib/catalogos";
 import { eliminarVenta } from "../acciones";
 
@@ -22,7 +22,7 @@ export const metadata = { title: "Venta — RanchOps" };
 
 export default async function VentaPage({ params }: PageProps<"/ventas/[id]">) {
   const { id } = await params;
-  const rancho = await requireRancho();
+  const { rancho } = await requireAdmin();
   const supabase = await createClient();
 
   const { data: venta } = await supabase

@@ -1,5 +1,6 @@
 "use client";
 
+import { fechaHoy } from "@/lib/fechas";
 import { useMemo, useState } from "react";
 import { Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -10,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CLASES_ANIMAL, formatoMoneda } from "@/lib/catalogos";
 import { Aviso } from "@/components/aviso";
 import { SelectCampo } from "@/components/ui/select-campo";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 type Renglon = {
   clase: string;
@@ -22,6 +24,7 @@ type Renglon = {
 type AnimalMini = {
   id: string;
   arete_control: string | null;
+  siniga?: string | null;
   clase: string;
 };
 
@@ -34,31 +37,75 @@ function totalRenglon(r: Renglon): number {
   return kilos * precioKg;
 }
 
+/**
+ * Arma los renglones a partir de los animales que se marcaron en la manga:
+ * uno por clase, con las cabezas y los kilos ya sumados.
+ */
+function renglonesDesdeManga(
+  animales: AnimalMini[],
+  preseleccion: { animal_id: string; peso: number | null }[]
+): Renglon[] {
+  const porClase = new Map<string, { cabezas: number; kilos: number }>();
+  for (const { animal_id, peso } of preseleccion) {
+    const animal = animales.find((a) => a.id === animal_id);
+    if (!animal) continue;
+    const clase =
+      CLASES_ANIMAL.find((c) => c.valor === animal.clase)?.plural.toLowerCase() ??
+      animal.clase;
+    const acumulado = porClase.get(clase) ?? { cabezas: 0, kilos: 0 };
+    porClase.set(clase, {
+      cabezas: acumulado.cabezas + 1,
+      kilos: acumulado.kilos + (peso ?? 0),
+    });
+  }
+  return [...porClase.entries()].map(([clase, { cabezas, kilos }]) => ({
+    clase,
+    cabezas: String(cabezas),
+    kilos_venta: kilos > 0 ? String(Math.round(kilos * 10) / 10) : "",
+    precio_kg: "",
+    precio_cabeza: "",
+  }));
+}
+
 export function FormularioVenta({
   action,
   divisiones,
   animales,
+  preseleccion = [],
+  enRetiro = [],
   error,
 }: {
   action: (formData: FormData) => Promise<void>;
   divisiones: { id: string; nombre: string }[];
   animales: AnimalMini[];
+  /** Animales marcados "a venta" en la manga, con el peso recién tomado. */
+  preseleccion?: { animal_id: string; peso: number | null }[];
+  /** Animales con período de retiro vigente: se avisa, no se bloquea. */
+  enRetiro?: { animal_id: string; producto: string; retiro_hasta: string }[];
   error?: string | null;
 }) {
-  const [renglones, setRenglones] = useState<Renglon[]>([
-    { clase: "becerros", cabezas: "", kilos_venta: "", precio_kg: "", precio_cabeza: "" },
-  ]);
-  const [seleccion, setSeleccion] = useState<Set<string>>(new Set());
-  const [mostrarAnimales, setMostrarAnimales] = useState(false);
+  const [renglones, setRenglones] = useState<Renglon[]>(() => {
+    const deManga = renglonesDesdeManga(animales, preseleccion);
+    return deManga.length > 0
+      ? deManga
+      : [{ clase: "becerros", cabezas: "", kilos_venta: "", precio_kg: "", precio_cabeza: "" }];
+  });
+  const [seleccion, setSeleccion] = useState<Set<string>>(
+    () => new Set(preseleccion.map((p) => p.animal_id))
+  );
+  const [mostrarAnimales, setMostrarAnimales] = useState(preseleccion.length > 0);
   const [filtro, setFiltro] = useState("");
 
   const total = renglones.reduce((s, r) => s + totalRenglon(r), 0);
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaHoy();
 
   const visibles = useMemo(
     () =>
       animales.filter(
-        (a) => !filtro || a.arete_control?.toLowerCase().includes(filtro.toLowerCase())
+        (a) =>
+          !filtro ||
+          a.arete_control?.toLowerCase().includes(filtro.toLowerCase()) ||
+          a.siniga?.toLowerCase().includes(filtro.toLowerCase())
       ),
     [animales, filtro]
   );
@@ -78,10 +125,28 @@ export function FormularioVenta({
     }))
   );
 
+  const retenidos = enRetiro.filter((r) => seleccion.has(r.animal_id));
+  const fechaCorta = (f: string) =>
+    new Date(`${f}T12:00:00`).toLocaleDateString("es-MX", {
+      day: "numeric",
+      month: "short",
+    });
+
   return (
     <form action={action} className="max-w-3xl space-y-6">
       {error && (
         <Aviso tono="peligro">{error}</Aviso>
+      )}
+      {retenidos.length > 0 && (
+        <Aviso tono="alerta" titulo="Animales en período de retiro">
+          {retenidos
+            .map((r) => {
+              const a = animales.find((x) => x.id === r.animal_id);
+              return `#${a?.arete_control ?? "s/n"} (${r.producto}, hasta el ${fechaCorta(r.retiro_hasta)})`;
+            })
+            .join(" · ")}
+          . La carne no debería venderse antes de esa fecha; tú decides.
+        </Aviso>
       )}
       <input type="hidden" name="renglones" value={renglonesJson} />
       {[...seleccion].map((id) => (
@@ -91,7 +156,7 @@ export function FormularioVenta({
       <div className="grid grid-cols-2 gap-4 md:grid-cols-4">
         <div className="space-y-2">
           <Label htmlFor="fecha-v">Fecha</Label>
-          <Input id="fecha-v" name="fecha" type="date" defaultValue={hoy} required />
+          <CampoFecha id="fecha-v" name="fecha" defaultValue={hoy} required />
         </div>
         <div className="space-y-2">
           <Label htmlFor="comprador">Comprador</Label>
