@@ -11,7 +11,7 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { TablaResponsiva } from "@/components/tabla-responsiva";
+import { TablaPro } from "@/components/tabla-pro";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { EstadoBadge } from "@/components/estado-badge";
 import { Aviso } from "@/components/aviso";
@@ -19,7 +19,7 @@ import { estadoPotrero } from "@/lib/estados";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { formatoFecha, formatoNumero } from "@/lib/catalogos";
-import type { PotreroEstado } from "@/lib/tipos";
+import type { PotreroCarga, PotreroEstado } from "@/lib/tipos";
 import { crearPotrero } from "./acciones";
 
 export const metadata = { title: "Potreros — RanchOps" };
@@ -31,19 +31,27 @@ export default async function PotrerosPage({
   const rancho = await requireRancho();
   const supabase = await createClient();
 
-  const [{ data: estados }, { data: grupos }] = await Promise.all([
-    supabase
-      .from("v_potrero_estado")
-      .select("*")
-      .eq("rancho_id", rancho.id)
-      .order("nombre"),
-    supabase
-      .from("grupos")
-      .select("id, nombre")
-      .eq("rancho_id", rancho.id),
-  ]);
+  const [{ data: estados }, { data: grupos }, { data: cargas }] =
+    await Promise.all([
+      supabase
+        .from("v_potrero_estado")
+        .select("*")
+        .eq("rancho_id", rancho.id)
+        .order("nombre"),
+      supabase
+        .from("grupos")
+        .select("id, nombre")
+        .eq("rancho_id", rancho.id),
+      supabase
+        .from("v_potrero_carga")
+        .select("*")
+        .eq("rancho_id", rancho.id),
+    ]);
 
   const nombreGrupo = new Map((grupos ?? []).map((g) => [g.id, g.nombre]));
+  const carga = new Map(
+    ((cargas ?? []) as PotreroCarga[]).map((c) => [c.potrero_id, c])
+  );
   const lista = (estados ?? []) as PotreroEstado[];
   const meta = rancho.meta_dias_descanso;
   const ocupados = lista.filter((p) => p.grupo_actual_id);
@@ -113,21 +121,27 @@ export default async function PotrerosPage({
           descripcion="Crea tus potreros aquí o dibújalos directamente en el mapa."
         />
       ) : (
-        <TablaResponsiva
+        <TablaPro
+          id="potreros"
           datos={lista}
           claveDe={(p) => p.potrero_id}
           hrefDe={(p) => `/potreros/${p.potrero_id}`}
+          agrupables={["estado"]}
+          exportarHref="/potreros/exportar"
           columnas={[
             {
               clave: "nombre",
               encabezado: "Potrero",
               enTarjeta: "titulo",
+              fija: true,
               celda: (p) => p.nombre,
             },
             {
               clave: "estado",
               encabezado: "Estado",
               enTarjeta: "estado",
+              valorDe: (p) =>
+                estadoPotrero(p.dias_descanso, meta, !!p.grupo_actual_id).etiqueta,
               celda: (p) => {
                 const e = estadoPotrero(p.dias_descanso, meta, !!p.grupo_actual_id);
                 return <EstadoBadge tono={e.tono}>{e.etiqueta}</EstadoBadge>;
@@ -138,6 +152,46 @@ export default async function PotrerosPage({
               encabezado: "Has",
               numerica: true,
               celda: (p) => formatoNumero(p.superficie_has, 1),
+            },
+            {
+              clave: "cabezas",
+              encabezado: "Cabezas",
+              numerica: true,
+              desde: "sm",
+              celda: (p) => carga.get(p.potrero_id)?.cabezas || "—",
+            },
+            {
+              clave: "ua",
+              encabezado: "UA",
+              numerica: true,
+              desde: "md",
+              celda: (p) => {
+                const c = carga.get(p.potrero_id);
+                return c && c.ua > 0 ? formatoNumero(c.ua, 1) : "—";
+              },
+            },
+            {
+              clave: "ua_ha",
+              encabezado: "UA/ha",
+              numerica: true,
+              apagada: true,
+              celda: (p) => {
+                const c = carga.get(p.potrero_id);
+                return c?.ua_por_ha ? formatoNumero(c.ua_por_ha, 2) : "—";
+              },
+            },
+            {
+              clave: "capacidad",
+              encabezado: "% capacidad",
+              numerica: true,
+              desde: "md",
+              celda: (p) => {
+                const pct = carga.get(p.potrero_id)?.pct_capacidad;
+                if (pct == null) return "—";
+                // Solo aviso: la app no mueve nada sola.
+                const tono = pct > 100 ? "peligro" : pct >= 80 ? "alerta" : "exito";
+                return <EstadoBadge tono={tono}>{pct}%</EstadoBadge>;
+              },
             },
             {
               clave: "grupo",
