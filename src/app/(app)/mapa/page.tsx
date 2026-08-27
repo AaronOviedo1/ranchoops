@@ -41,7 +41,12 @@ export default async function MapaPage() {
         .eq("rancho_id", rancho.id)
         .eq("activo", true),
       supabase.from("v_potrero_estado").select("*").eq("rancho_id", rancho.id),
-      supabase.from("grupos").select("id, nombre").eq("rancho_id", rancho.id),
+      supabase
+        .from("grupos")
+        .select("id, nombre, potrero_actual_id")
+        .eq("rancho_id", rancho.id)
+        .eq("activo", true)
+        .order("nombre"),
       supabase
         .from("pluviometros")
         .select("id, nombre, geom")
@@ -49,7 +54,7 @@ export default async function MapaPage() {
         .eq("activo", true),
       supabase
         .from("infraestructura")
-        .select("id, nombre, tipo, geom")
+        .select("id, nombre, tipo, geom, capacidad")
         .eq("rancho_id", rancho.id),
     ]);
 
@@ -83,6 +88,7 @@ export default async function MapaPage() {
       nombre: i.nombre,
       tipo: i.tipo,
       geom: i.geom,
+      capacidad: i.capacidad,
     })),
   ];
 
@@ -90,13 +96,14 @@ export default async function MapaPage() {
     <div>
       <PageHeader
         titulo="Mapa del rancho"
-        descripcion="Dibuja potreros, marca pluviómetros e infraestructura, y ve el estado del pastoreo."
+        descripcion="Traza potreros y áreas, marca bebederos y tuberías, mueve grupos de potrero o importa el KMZ que ya tienes."
         className="mb-3"
       />
       <MapaRancho
         token={token}
         potreros={potrerosMapa}
         puntos={puntos}
+        grupos={grupos ?? []}
         meta={rancho.meta_dias_descanso}
       />
     </div>
