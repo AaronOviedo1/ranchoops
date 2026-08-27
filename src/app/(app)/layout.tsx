@@ -1,5 +1,6 @@
-import { requireRancho } from "@/lib/auth";
+import { requireMembresia } from "@/lib/auth";
 import { BottomNav, SidebarNav, TituloSeccion } from "@/components/navegacion";
+import { PestanasSeccion } from "@/components/pestanas-seccion";
 import { LogoRanchOps } from "@/components/marca";
 import { BotonSalir } from "@/components/boton-salir";
 
@@ -8,22 +9,30 @@ export default async function AppLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const rancho = await requireRancho();
+  const { rancho, rol } = await requireMembresia();
   const iniciales = rancho.nombre.trim().slice(0, 2).toUpperCase() || "R";
 
   return (
     <div className="flex min-h-screen bg-background">
-      <SidebarNav nombreRancho={rancho.nombre}>
+      <SidebarNav nombreRancho={rancho.nombre} rol={rol}>
+        {/* Con el menú colapsado quedan las iniciales y la puerta de salida. */}
         <div className="space-y-2">
-          <div className="flex items-center gap-2.5 px-1">
-            <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground">
+          <div className="flex items-center gap-2.5 px-1 group-data-[colapsado=true]/sidebar:justify-center group-data-[colapsado=true]/sidebar:px-0">
+            <span
+              title={rancho.nombre}
+              className="flex size-8 shrink-0 items-center justify-center rounded-full bg-primary text-[11px] font-semibold text-primary-foreground"
+            >
               {iniciales}
             </span>
-            <span className="min-w-0 flex-1 truncate text-sm font-medium">
+            <span className="min-w-0 flex-1 truncate text-sm font-medium group-data-[colapsado=true]/sidebar:hidden">
               {rancho.nombre}
             </span>
           </div>
-          <BotonSalir />
+          <BotonSalir className="group-data-[colapsado=true]/sidebar:hidden" />
+          <BotonSalir
+            variante="compacto"
+            className="hidden group-data-[colapsado=true]/sidebar:block"
+          />
         </div>
       </SidebarNav>
 
@@ -42,12 +51,14 @@ export default async function AppLayout({
           </div>
         </header>
 
+        <PestanasSeccion rol={rol} />
+
         <main className="mx-auto w-full max-w-[1400px] flex-1 p-4 pb-28 md:p-8 md:pb-8">
           {children}
         </main>
       </div>
 
-      <BottomNav />
+      <BottomNav rol={rol} />
     </div>
   );
 }

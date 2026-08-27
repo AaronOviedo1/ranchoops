@@ -60,6 +60,7 @@ export async function invitarMiembro(formData: FormData) {
   const { data, error } = await supabase.rpc("agregar_miembro_por_correo", {
     correo,
     r: rancho.id,
+    p_rol: campo(formData, "rol") ?? "operador",
   });
   const mensaje = error ? error.message : String(data);
   revalidatePath("/configuracion");

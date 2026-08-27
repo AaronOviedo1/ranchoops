@@ -12,13 +12,27 @@ export function BotonSalir({
   variante = "completo",
   className,
 }: {
-  /** "completo" muestra la etiqueta; "icono" solo el símbolo (headers estrechos). */
-  variante?: "completo" | "icono";
+  /**
+   * "completo" muestra la etiqueta, "icono" el símbolo con "Salir" al lado
+   * (headers estrechos) y "compacto" solo el símbolo (menú colapsado).
+   */
+  variante?: "completo" | "icono" | "compacto";
   className?: string;
 }) {
   return (
     <form action={cerrarSesion} className={className}>
-      {variante === "icono" ? (
+      {variante === "compacto" ? (
+        <Button
+          type="submit"
+          variant="ghost"
+          size="sm"
+          aria-label="Cerrar sesión"
+          title="Cerrar sesión"
+          className="w-full text-muted-foreground"
+        >
+          <LogOut className="size-4" />
+        </Button>
+      ) : variante === "icono" ? (
         <Button
           type="submit"
           variant="ghost"
