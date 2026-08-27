@@ -1,30 +1,22 @@
 import Link from "next/link";
-import { Plus, Receipt, Trash2 } from "lucide-react";
+import { Receipt, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { TablaResponsiva } from "@/components/tabla-responsiva";
-import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
-import { requireRancho } from "@/lib/auth";
-import { CATEGORIAS_GASTO, formatoFecha, formatoMoneda } from "@/lib/catalogos";
+import { requireAdmin } from "@/lib/auth";
+import { formatoFecha, formatoMoneda } from "@/lib/catalogos";
 import { crearGasto, eliminarGasto } from "./acciones";
-import { SelectCampo } from "@/components/ui/select-campo";
+import { DialogoGasto } from "./dialogo-gasto";
+import { hayLectorDeTickets } from "./leer-ticket";
 
 export const metadata = { title: "Costos — RanchOps" };
 
 export default async function CostosPage({ searchParams }: PageProps<"/costos">) {
   const sp = await searchParams;
-  const rancho = await requireRancho();
+  const { rancho } = await requireAdmin();
+  const lector = await hayLectorDeTickets();
   const supabase = await createClient();
 
   const mesActual = new Date().toISOString().slice(0, 7);
@@ -76,91 +68,12 @@ export default async function CostosPage({ searchParams }: PageProps<"/costos">)
   return (
     <div>
       <PageHeader titulo="Costos" descripcion={`Gastos de ${nombreMes}`}>
-        <Dialog>
-          <DialogTrigger
-            render={
-              <Button>
-                <Plus className="h-4 w-4" /> Nuevo gasto
-              </Button>
-            }
-          />
-          <DialogContent className="max-h-[90dvh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle>Registrar gasto</DialogTitle>
-            </DialogHeader>
-            <form action={crearGasto} className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fecha-g">Fecha</Label>
-                  <Input
-                    id="fecha-g"
-                    name="fecha"
-                    type="date"
-                    defaultValue={new Date().toISOString().slice(0, 10)}
-                    required
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="monto">Monto (MXN)</Label>
-                  <Input id="monto" name="monto" type="number" step="0.01" required />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="concepto">Concepto</Label>
-                <Input id="concepto" name="concepto" required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label>Categoría</Label>
-                  <SelectCampo
-                    name="categoria"
-                    opcionVacia={false}
-                    defaultValue={CATEGORIAS_GASTO[0]}
-                    opciones={CATEGORIAS_GASTO.map((c) => ({
-                      valor: c,
-                      etiqueta: c,
-                    }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="proveedor-g">Proveedor</Label>
-                  <Input id="proveedor-g" name="proveedor" />
-                </div>
-                <div className="space-y-2">
-                  <Label>División</Label>
-                  <SelectCampo
-                    name="division_id"
-                    opciones={(divisiones ?? []).map((d) => ({
-                      valor: d.id,
-                      etiqueta: d.nombre,
-                    }))}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label>Grupo</Label>
-                  <SelectCampo
-                    name="grupo_id"
-                    opciones={(grupos ?? []).map((g) => ({
-                      valor: g.id,
-                      etiqueta: g.nombre,
-                    }))}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="comprobante">Comprobante (foto o PDF, opcional)</Label>
-                <Input id="comprobante" name="comprobante" type="file" accept="image/*,.pdf" />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="obs-g">Observaciones</Label>
-                <Textarea id="obs-g" name="obs" rows={2} />
-              </div>
-              <Button type="submit" className="w-full">
-                Guardar gasto
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <DialogoGasto
+          action={crearGasto}
+          divisiones={divisiones ?? []}
+          grupos={grupos ?? []}
+          hayLector={lector}
+        />
       </PageHeader>
 
       <div className="mb-4 grid grid-cols-2 gap-3 md:grid-cols-4">

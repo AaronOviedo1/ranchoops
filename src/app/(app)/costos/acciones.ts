@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
+import { fechaHoy } from "@/lib/fechas";
 
 function campo(formData: FormData, nombre: string): string | null {
   const v = String(formData.get(nombre) ?? "").trim();
@@ -35,7 +36,7 @@ export async function crearGasto(formData: FormData) {
 
   const { error } = await supabase.from("gastos").insert({
     rancho_id: rancho.id,
-    fecha: campo(formData, "fecha") ?? new Date().toISOString().slice(0, 10),
+    fecha: campo(formData, "fecha") ?? fechaHoy(),
     concepto,
     proveedor: campo(formData, "proveedor"),
     monto,
