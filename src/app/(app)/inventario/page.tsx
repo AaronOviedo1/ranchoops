@@ -1,3 +1,4 @@
+import { fechaHoy } from "@/lib/fechas";
 import { AlertTriangle, Package, PackagePlus, Plus } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -21,6 +22,7 @@ import type { Existencia } from "@/lib/tipos";
 import { crearProducto, registrarEntrada } from "./acciones";
 import { Aviso } from "@/components/aviso";
 import { SelectCampo } from "@/components/ui/select-campo";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 export const metadata = { title: "Inventario — RanchOps" };
 
@@ -108,6 +110,20 @@ export default async function InventarioPage({
                   <Label htmlFor="proveedor-p">Proveedor</Label>
                   <Input id="proveedor-p" name="proveedor" />
                 </div>
+                <div className="space-y-2">
+                  <Label htmlFor="dias_retiro">Días de retiro</Label>
+                  <Input
+                    id="dias_retiro"
+                    name="dias_retiro"
+                    type="number"
+                    step="1"
+                    placeholder="p. ej. 21"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Días que la carne no se vende después de aplicarlo. La
+                    ficha del animal avisa mientras corre el plazo.
+                  </p>
+                </div>
               </div>
               <Button type="submit" className="w-full">
                 Crear producto
@@ -153,16 +169,23 @@ export default async function InventarioPage({
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="fecha-e">Fecha</Label>
-                  <Input
+                  <CampoFecha
                     id="fecha-e"
                     name="fecha"
-                    type="date"
-                    defaultValue={new Date().toISOString().slice(0, 10)}
+                    defaultValue={fechaHoy()}
                   />
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="proveedor-e">Proveedor</Label>
                   <Input id="proveedor-e" name="proveedor" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="lote-e">Número de lote</Label>
+                  <Input id="lote-e" name="lote" placeholder="del empaque" />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="caducidad-e">Caducidad</Label>
+                  <Input id="caducidad-e" name="caducidad" type="date" />
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm">

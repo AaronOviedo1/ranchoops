@@ -4,6 +4,7 @@ import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
+import { fechaHoy } from "@/lib/fechas";
 
 function campo(formData: FormData, nombre: string): string | null {
   const v = String(formData.get(nombre) ?? "").trim();
@@ -26,6 +27,7 @@ export async function crearProducto(formData: FormData) {
     costo_unitario: campo(formData, "costo_unitario") ? Number(campo(formData, "costo_unitario")) : null,
     stock_minimo: campo(formData, "stock_minimo") ? Number(campo(formData, "stock_minimo")) : null,
     proveedor: campo(formData, "proveedor"),
+    dias_retiro: campo(formData, "dias_retiro") ? Number(campo(formData, "dias_retiro")) : null,
   });
   if (error) redirect(`/inventario?error=${encodeURIComponent(error.message)}`);
   revalidatePath("/inventario");
@@ -44,7 +46,7 @@ export async function registrarEntrada(formData: FormData) {
   const cantidad = Number(campo(formData, "cantidad") ?? 0);
   if (!productoId || !(cantidad > 0)) redirect("/inventario");
 
-  const fecha = campo(formData, "fecha") ?? new Date().toISOString().slice(0, 10);
+  const fecha = campo(formData, "fecha") ?? fechaHoy();
   const costoUnitario = campo(formData, "costo_unitario")
     ? Number(campo(formData, "costo_unitario"))
     : null;
@@ -66,6 +68,8 @@ export async function registrarEntrada(formData: FormData) {
     costo_total: costoTotal,
     fecha,
     proveedor,
+    lote: campo(formData, "lote"),
+    caducidad: campo(formData, "caducidad"),
     obs: campo(formData, "obs"),
   });
 
@@ -119,7 +123,7 @@ export async function ajustarInventario(formData: FormData) {
     producto_id: productoId,
     tipo: "ajuste",
     cantidad,
-    fecha: new Date().toISOString().slice(0, 10),
+    fecha: fechaHoy(),
     obs: campo(formData, "obs") ?? "Ajuste manual",
   });
   revalidatePath("/inventario");
