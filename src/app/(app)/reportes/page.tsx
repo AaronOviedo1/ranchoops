@@ -12,7 +12,7 @@ import {
 } from "@/components/ui/table";
 import { PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
-import { requireRancho } from "@/lib/auth";
+import { requireAdmin } from "@/lib/auth";
 import {
   CLASES_ANIMAL,
   etiquetaTrabajo,
@@ -26,7 +26,7 @@ export default async function ReportesPage({
   searchParams,
 }: PageProps<"/reportes">) {
   const sp = await searchParams;
-  const rancho = await requireRancho();
+  const { rancho } = await requireAdmin();
   const supabase = await createClient();
 
   const mesActual = new Date().toISOString().slice(0, 7);
