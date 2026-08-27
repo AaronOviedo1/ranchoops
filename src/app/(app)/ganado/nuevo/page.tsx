@@ -13,15 +13,34 @@ export default async function NuevoAnimalPage({
   const rancho = await requireRancho();
   const supabase = await createClient();
 
-  const [{ data: divisiones }, { data: grupos }, { data: madres }] =
+  const [
+    { data: divisiones },
+    { data: grupos },
+    { data: potreros },
+    { data: madres },
+    { data: padres },
+  ] =
     await Promise.all([
       supabase.from("divisiones").select("*").eq("rancho_id", rancho.id).eq("activo", true),
       supabase.from("grupos").select("*").eq("rancho_id", rancho.id).eq("activo", true),
       supabase
+        .from("potreros")
+        .select("*")
+        .eq("rancho_id", rancho.id)
+        .eq("activo", true)
+        .order("nombre"),
+      supabase
         .from("animales")
-        .select("id, arete_control, siniga")
+        .select("id, arete_control, siniga, nombre, clase")
         .eq("rancho_id", rancho.id)
         .eq("sexo", "H")
+        .eq("status", "activo")
+        .order("arete_control"),
+      supabase
+        .from("animales")
+        .select("id, arete_control, siniga, nombre, clase")
+        .eq("rancho_id", rancho.id)
+        .eq("sexo", "M")
         .eq("status", "activo")
         .order("arete_control"),
     ]);
@@ -33,7 +52,16 @@ export default async function NuevoAnimalPage({
         action={crearAnimal}
         divisiones={divisiones ?? []}
         grupos={grupos ?? []}
+        potreros={potreros ?? []}
         madres={madres ?? []}
+        padres={padres ?? []}
+        prellenado={{
+          compra_id: typeof params.compra === "string" ? params.compra : null,
+          procedencia:
+            typeof params.procedencia === "string" ? params.procedencia : null,
+          fecha_en_campo:
+            typeof params.fecha_en_campo === "string" ? params.fecha_en_campo : null,
+        }}
         error={typeof params.error === "string" ? params.error : null}
       />
     </div>

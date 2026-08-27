@@ -3,6 +3,7 @@ import { PageHeader } from "@/components/page-header";
 import { AnimalForm } from "@/components/animal-form";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
+import { urlFirmada } from "@/lib/archivos";
 import { actualizarAnimal } from "../../acciones";
 import type { Animal } from "@/lib/tipos";
 
@@ -17,21 +18,35 @@ export default async function EditarAnimalPage({
   const rancho = await requireRancho();
   const supabase = await createClient();
 
-  const [{ data: animal }, { data: divisiones }, { data: grupos }, { data: madres }] =
-    await Promise.all([
-      supabase.from("animales").select("*").eq("id", id).eq("rancho_id", rancho.id).single(),
-      supabase.from("divisiones").select("*").eq("rancho_id", rancho.id).eq("activo", true),
-      supabase.from("grupos").select("*").eq("rancho_id", rancho.id).eq("activo", true),
-      supabase
-        .from("animales")
-        .select("id, arete_control, siniga")
-        .eq("rancho_id", rancho.id)
-        .eq("sexo", "H")
-        .neq("id", id)
-        .order("arete_control"),
-    ]);
+  const [
+    { data: animal },
+    { data: divisiones },
+    { data: grupos },
+    { data: madres },
+    { data: padres },
+  ] = await Promise.all([
+    supabase.from("animales").select("*").eq("id", id).eq("rancho_id", rancho.id).single(),
+    supabase.from("divisiones").select("*").eq("rancho_id", rancho.id).eq("activo", true),
+    supabase.from("grupos").select("*").eq("rancho_id", rancho.id).eq("activo", true),
+    supabase
+      .from("animales")
+      .select("id, arete_control, siniga, nombre, clase")
+      .eq("rancho_id", rancho.id)
+      .eq("sexo", "H")
+      .neq("id", id)
+      .order("arete_control"),
+    supabase
+      .from("animales")
+      .select("id, arete_control, siniga, nombre, clase")
+      .eq("rancho_id", rancho.id)
+      .eq("sexo", "M")
+      .neq("id", id)
+      .order("arete_control"),
+  ]);
 
   if (!animal) notFound();
+
+  const foto = await urlFirmada(supabase, (animal as Animal).foto_url);
 
   return (
     <div>
@@ -42,6 +57,8 @@ export default async function EditarAnimalPage({
         divisiones={divisiones ?? []}
         grupos={grupos ?? []}
         madres={madres ?? []}
+        padres={padres ?? []}
+        fotoUrl={foto}
         error={typeof sp.error === "string" ? sp.error : null}
       />
     </div>

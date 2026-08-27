@@ -1,5 +1,6 @@
 "use client";
 
+import { fechaHoy } from "@/lib/fechas";
 import { useState } from "react";
 import { Baby, Skull } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -15,6 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { SelectCampo } from "@/components/ui/select-campo";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 export function DialogoParto({
   action,
@@ -24,7 +26,7 @@ export function DialogoParto({
   padreSugerido?: string | null;
 }) {
   const [malparto, setMalparto] = useState(false);
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaHoy();
 
   return (
     <Dialog>
@@ -43,7 +45,7 @@ export function DialogoParto({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="fecha">Fecha</Label>
-              <Input id="fecha" name="fecha" type="date" defaultValue={hoy} required />
+              <CampoFecha id="fecha" name="fecha" defaultValue={hoy} required />
             </div>
             <div className="flex items-end gap-2 pb-2">
               <Checkbox
@@ -118,7 +120,7 @@ export function DialogoMuerte({
 }: {
   action: (formData: FormData) => Promise<void>;
 }) {
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaHoy();
   return (
     <Dialog>
       <DialogTrigger
@@ -135,7 +137,7 @@ export function DialogoMuerte({
         <form action={action} className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="fecha-m">Fecha</Label>
-            <Input id="fecha-m" name="fecha" type="date" defaultValue={hoy} required />
+            <CampoFecha id="fecha-m" name="fecha" defaultValue={hoy} required />
           </div>
           <div className="space-y-2">
             <Label htmlFor="causa">Causa</Label>
