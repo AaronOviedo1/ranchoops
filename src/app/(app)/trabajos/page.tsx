@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, Syringe } from "lucide-react";
+import { Layers, Plus, ScanLine, Syringe } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TablaResponsiva } from "@/components/tabla-responsiva";
@@ -23,12 +23,23 @@ export default async function TrabajosPage() {
     .order("created_at", { ascending: false })
     .limit(100);
 
+  // Cuántos trabajos se hicieron en cada jornada, para marcarlos como uno solo.
+  const enJornada = new Map<string, number>();
+  for (const e of eventos ?? []) {
+    if (e.sesion_id) enJornada.set(e.sesion_id, (enJornada.get(e.sesion_id) ?? 0) + 1);
+  }
+
   return (
     <div>
       <PageHeader titulo="Trabajos de ganado" descripcion="Últimos 100 registros">
-        <Button render={<Link href="/trabajos/nuevo" />}>
-          <Plus className="h-4 w-4" /> Trabajar ganado
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" render={<Link href="/trabajos/manga" />}>
+            <ScanLine className="h-4 w-4" /> Manga
+          </Button>
+          <Button render={<Link href="/trabajos/nuevo" />}>
+            <Plus className="h-4 w-4" /> Trabajar ganado
+          </Button>
+        </div>
       </PageHeader>
 
       {(eventos ?? []).length === 0 ? (
@@ -51,7 +62,18 @@ export default async function TrabajosPage() {
               encabezado: "Trabajo",
               enTarjeta: "titulo",
               celda: (e) => (
-                <Badge variant="outline">{etiquetaTrabajo(e.tipo)}</Badge>
+                <span className="flex items-center gap-1.5">
+                  <Badge variant="outline">{etiquetaTrabajo(e.tipo)}</Badge>
+                  {e.sesion_id && (
+                    <span
+                      title={`Misma jornada: ${enJornada.get(e.sesion_id) ?? 1} trabajos`}
+                      className="flex items-center gap-0.5 text-xs text-muted-foreground"
+                    >
+                      <Layers className="size-3" />
+                      {enJornada.get(e.sesion_id) ?? 1}
+                    </span>
+                  )}
+                </span>
               ),
             },
             {
