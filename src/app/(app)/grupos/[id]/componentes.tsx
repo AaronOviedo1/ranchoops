@@ -1,7 +1,8 @@
 "use client";
 
+import { fechaHoy } from "@/lib/fechas";
 import { useMemo, useState } from "react";
-import { ArrowRightLeft, Plus } from "lucide-react";
+import { ArrowRightLeft, Plus, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
@@ -17,6 +18,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { RESIDUOS } from "@/lib/catalogos";
 import { SelectCampo } from "@/components/ui/select-campo";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 type AnimalMini = {
   id: string;
@@ -138,7 +140,7 @@ export function DialogoMoverPotrero({
   potreroActual: string | null;
   numAnimales: number;
 }) {
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaHoy();
   return (
     <Dialog>
       <DialogTrigger
@@ -156,7 +158,7 @@ export function DialogoMoverPotrero({
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="fecha-mov">Fecha</Label>
-              <Input id="fecha-mov" name="fecha" type="date" defaultValue={hoy} required />
+              <CampoFecha id="fecha-mov" name="fecha" defaultValue={hoy} required />
             </div>
             <div className="space-y-2">
               <Label htmlFor="num_animales"># animales</Label>
@@ -204,6 +206,67 @@ export function DialogoMoverPotrero({
             Registrar movimiento
           </Button>
         </form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/**
+ * Eliminar el grupo, diciendo antes qué se lleva por delante y qué no.
+ *
+ * El grupo es una caja de manejo, no un ser vivo: al deshacerse de ella los
+ * animales siguen en el rancho, solo que sin grupo asignado.
+ */
+export function DialogoEliminarGrupo({
+  action,
+  nombre,
+  numAnimales,
+  numMovimientos,
+}: {
+  action: () => void;
+  nombre: string;
+  numAnimales: number;
+  numMovimientos: number;
+}) {
+  return (
+    <Dialog>
+      <DialogTrigger
+        render={
+          <Button variant="outline" size="sm">
+            <Trash2 className="h-4 w-4" /> Eliminar grupo
+          </Button>
+        }
+      />
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Eliminar {nombre}</DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 text-sm">
+          {numAnimales > 0 && (
+            <p>
+              Los <strong>{numAnimales} animales</strong> del grupo se quedan en el
+              rancho, nada más sin grupo asignado. Después los puedes meter a otro.
+            </p>
+          )}
+          {numMovimientos > 0 ? (
+            <p className="text-muted-foreground">
+              El grupo pasó por {numMovimientos}{" "}
+              {numMovimientos === 1 ? "potrero" : "potreros"}, así que se archiva en
+              vez de borrarse: desaparece de la lista y su historial de pastoreo se
+              queda para el cálculo de la carga. Si estaba en un potrero, se le
+              marca la salida hoy.
+            </p>
+          ) : (
+            <p className="text-muted-foreground">
+              Nunca pisó un potrero, así que se borra por completo.
+            </p>
+          )}
+          <form action={action}>
+            <Button type="submit" variant="destructive" className="w-full">
+              Sí, eliminar el grupo
+            </Button>
+          </form>
+        </div>
       </DialogContent>
     </Dialog>
   );

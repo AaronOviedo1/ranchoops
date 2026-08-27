@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { X } from "lucide-react";
+import { HandCoins, X } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -16,8 +16,12 @@ import { PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { formatoFecha } from "@/lib/catalogos";
-import { asignarAnimales, moverAPotrero, quitarAnimal } from "../acciones";
-import { DialogoAgregarAnimales, DialogoMoverPotrero } from "./componentes";
+import { asignarAnimales, eliminarGrupo, moverAPotrero, quitarAnimal } from "../acciones";
+import {
+  DialogoAgregarAnimales,
+  DialogoEliminarGrupo,
+  DialogoMoverPotrero,
+} from "./componentes";
 
 export const metadata = { title: "Grupo — RanchOps" };
 
@@ -101,6 +105,21 @@ export default async function GrupoPage({ params }: PageProps<"/grupos/[id]">) {
           >
             Trabajar grupo
           </Button>
+          {(miembros ?? []).length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              render={<Link href={`/ventas/nueva?grupo=${id}`} />}
+            >
+              <HandCoins className="h-4 w-4" /> Vender el grupo
+            </Button>
+          )}
+          <DialogoEliminarGrupo
+            action={eliminarGrupo.bind(null, id)}
+            nombre={grupo.nombre}
+            numAnimales={(miembros ?? []).length}
+            numMovimientos={(historial ?? []).length}
+          />
         </div>
       </PageHeader>
 

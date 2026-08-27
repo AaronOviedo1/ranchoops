@@ -15,7 +15,8 @@ import { Label } from "@/components/ui/label";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
-import { crearGrupo } from "./acciones";
+import { crearGrupo, crearGrupoPorEstado } from "./acciones";
+import { DialogoGrupoPorEstado } from "./grupo-por-estado";
 import { Aviso } from "@/components/aviso";
 import { SelectCampo } from "@/components/ui/select-campo";
 
@@ -37,18 +38,25 @@ export default async function GruposPage({ searchParams }: PageProps<"/grupos">)
       supabase.from("divisiones").select("*").eq("rancho_id", rancho.id).eq("activo", true),
       supabase
         .from("animales")
-        .select("grupo_id")
+        .select("id, clase, grupo_id, status_reproductivo")
         .eq("rancho_id", rancho.id)
-        .eq("status", "activo")
-        .not("grupo_id", "is", null),
+        .eq("status", "activo"),
     ]);
 
   const porGrupo = new Map<string, number>();
   for (const c of conteos ?? []) {
-    porGrupo.set(c.grupo_id!, (porGrupo.get(c.grupo_id!) ?? 0) + 1);
+    if (c.grupo_id) porGrupo.set(c.grupo_id, (porGrupo.get(c.grupo_id) ?? 0) + 1);
   }
 
   const error = typeof sp.error === "string" ? sp.error : null;
+
+  const dialogoPorEstado = (
+    <DialogoGrupoPorEstado
+      action={crearGrupoPorEstado}
+      animales={conteos ?? []}
+      divisiones={divisiones ?? []}
+    />
+  );
 
   const dialogoNuevo = (
     <Dialog>
@@ -88,8 +96,14 @@ export default async function GruposPage({ searchParams }: PageProps<"/grupos">)
 
   return (
     <div>
-      <PageHeader titulo="Grupos" descripcion="Lotes de manejo del ganado">
-        {dialogoNuevo}
+      <PageHeader
+        titulo="Grupos"
+        descripcion="Manadas y lotes de manejo. Los costos se cargan a la división, no al grupo."
+      >
+        <div className="flex flex-wrap gap-2">
+          {dialogoPorEstado}
+          {dialogoNuevo}
+        </div>
       </PageHeader>
 
       {error && (
