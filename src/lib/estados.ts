@@ -30,3 +30,24 @@ export function estadoPotrero(
     return { clave: "listo", tono: "exito", etiqueta: "Listo" };
   return { clave: "descansando", tono: "alerta", etiqueta: "Descansando" };
 }
+
+const TAREA: Record<string, { tono: Tono; etiqueta: string }> = {
+  pendiente: { tono: "alerta", etiqueta: "Pendiente" },
+  en_curso: { tono: "info", etiqueta: "En curso" },
+  hecha: { tono: "exito", etiqueta: "Hecha" },
+  cancelada: { tono: "neutro", etiqueta: "Cancelada" },
+};
+
+export function estadoTarea(estado: string): { tono: Tono; etiqueta: string } {
+  return TAREA[estado] ?? { tono: "neutro", etiqueta: estado };
+}
+
+const PRIORIDAD: Record<string, { tono: Tono; etiqueta: string }> = {
+  baja: { tono: "neutro", etiqueta: "Baja" },
+  media: { tono: "info", etiqueta: "Media" },
+  alta: { tono: "peligro", etiqueta: "Alta" },
+};
+
+export function estadoPrioridad(prioridad: string): { tono: Tono; etiqueta: string } {
+  return PRIORIDAD[prioridad] ?? { tono: "neutro", etiqueta: prioridad };
+}

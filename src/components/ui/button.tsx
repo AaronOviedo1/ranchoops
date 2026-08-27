@@ -1,3 +1,7 @@
+"use client"
+
+import { isValidElement } from "react"
+import { useFormStatus } from "react-dom"
 import { Button as ButtonPrimitive } from "@base-ui/react/button"
 import { cva, type VariantProps } from "class-variance-authority"
 
@@ -44,11 +48,27 @@ function Button({
   className,
   variant = "default",
   size = "default",
+  disabled,
   ...props
 }: ButtonPrimitive.Props & VariantProps<typeof buttonVariants>) {
+  // Con `render` casi siempre entra un <Link>, y Base UI avisa si sigue
+  // creyendo que abajo hay un <button> nativo: las semánticas de botón que
+  // aplicaría (type, disabled, la tecla espacio) no existen en un <a>.
+  const nativo =
+    !props.render || (isValidElement(props.render) && props.render.type === "button")
+
+  // Mientras la server action del formulario va en camino, el botón que lo
+  // envía se apaga solo. Sin esto, el segundo clic de quien no ve respuesta
+  // manda el formulario otra vez y salen dos grupos iguales en la lista.
+  // Fuera de un formulario, `pending` siempre es false.
+  const { pending } = useFormStatus()
+  const enviando = props.type === "submit" && pending
+
   return (
     <ButtonPrimitive
       data-slot="button"
+      nativeButton={nativo}
+      disabled={disabled || enviando}
       className={cn(buttonVariants({ variant, size, className }))}
       {...props}
     />

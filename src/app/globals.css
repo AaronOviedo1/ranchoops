@@ -267,6 +267,23 @@
 .popup-ranch .popup-enlace {
   @apply text-xs font-medium text-primary underline underline-offset-2;
 }
+/* Separa el corral del potrero que lo contiene dentro del mismo globo. */
+.popup-ranch .popup-raya {
+  @apply my-1.5 border-border;
+}
 .mapboxgl-ctrl-group {
   @apply rounded-lg shadow-none ring-1 ring-border;
+}
+
+/* Al imprimir, que salga la tabla y no el esqueleto de la app. */
+@media print {
+  aside,
+  nav,
+  header button,
+  [data-slot="popover-content"] {
+    display: none !important;
+  }
+  main {
+    padding: 0 !important;
+  }
 }

@@ -1,7 +1,7 @@
+import { fechaHoy } from "@/lib/fechas";
 import { NotebookPen } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
@@ -9,6 +9,7 @@ import { requireRancho } from "@/lib/auth";
 import { formatoFecha } from "@/lib/catalogos";
 import { registrarNota } from "../trabajos/acciones";
 import { SelectCampo } from "@/components/ui/select-campo";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 export const metadata = { title: "Bitácora — RanchOps" };
 
@@ -33,7 +34,7 @@ export default async function BitacoraPage() {
       .order("nombre"),
   ]);
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaHoy();
 
   // Agrupa por mes para lectura tipo "Reporte Mensual"
   const porMes = new Map<string, typeof notas>();
@@ -54,7 +55,7 @@ export default async function BitacoraPage() {
         <CardContent className="pt-4">
           <form action={registrarNota} className="space-y-3">
             <div className="flex flex-wrap gap-3">
-              <Input name="fecha" type="date" defaultValue={hoy} className="w-40" required />
+              <CampoFecha name="fecha" defaultValue={hoy} className="w-40" required />
               <SelectCampo
                 name="grupo_id"
                 opcionVacia="Sin grupo"

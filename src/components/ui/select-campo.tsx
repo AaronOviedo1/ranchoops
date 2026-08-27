@@ -1,13 +1,6 @@
 "use client";
 
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import { cn } from "@/lib/utils";
+import { ComboCampo, type OpcionCombo } from "@/components/ui/combo-campo";
 
 export type OpcionSelect = {
   valor: string;
@@ -18,8 +11,13 @@ export type OpcionSelect = {
 /**
  * Select unificado para formularios.
  *
- * Base UI emite un input oculto con el `name`, así que sustituye a un
- * <select> nativo sin tocar las server actions que leen formData.get(name).
+ * Por dentro es el mismo ComboCampo del buscador de animales y razas: un solo
+ * menú en toda la app, con el mismo aspecto se elija ganado o estado
+ * reproductivo. El buscador solo se enfoca solo cuando la lista es larga, para
+ * no abrir el teclado del teléfono encima de tres opciones.
+ *
+ * Emite un input oculto con el `name`, así que sustituye a un <select> nativo
+ * sin tocar las server actions que leen formData.get(name).
  */
 export function SelectCampo({
   name,
@@ -28,7 +26,7 @@ export function SelectCampo({
   value,
   onValueChange,
   placeholder = "—",
-  opcionVacia = "—",
+  opcionVacia,
   required,
   disabled,
   id,
@@ -42,6 +40,11 @@ export function SelectCampo({
   value?: string;
   onValueChange?: (valor: string) => void;
   placeholder?: string;
+  /**
+   * Renglón que representa "sin valor" cuando vaciar el campo significa algo
+   * ("Sin grupo", "— Crear potrero nuevo —"). Si no se pasa, la lista arranca
+   * en la primera opción real: para dejarlo vacío está la ✕ del campo.
+   */
   opcionVacia?: string | false;
   required?: boolean;
   disabled?: boolean;
@@ -50,38 +53,32 @@ export function SelectCampo({
   className?: string;
   contentClassName?: string;
 }) {
-  const lista: OpcionSelect[] =
-    opcionVacia === false
-      ? opciones
-      : [{ valor: "", etiqueta: opcionVacia }, ...opciones];
-
-  const controlado = value !== undefined;
+  const lista: OpcionCombo[] = (
+    opcionVacia
+      ? [{ valor: "", etiqueta: opcionVacia }, ...opciones]
+      : opciones
+  ).map((o) => ({
+    valor: o.valor,
+    etiqueta: o.etiqueta,
+    deshabilitada: "deshabilitada" in o ? o.deshabilitada : undefined,
+  }));
 
   return (
-    <Select
+    <ComboCampo
+      id={id}
       name={name}
+      opciones={lista}
+      defaultValue={defaultValue}
+      value={value}
+      onValueChange={onValueChange}
+      placeholder={placeholder}
+      textoBuscar="Escribe para buscar…"
+      vacio="Sin opciones."
       required={required}
       disabled={disabled}
-      items={lista.map((o) => ({ value: o.valor, label: o.etiqueta }))}
-      {...(controlado
-        ? { value, onValueChange: (v: unknown) => onValueChange?.(String(v ?? "")) }
-        : {
-            defaultValue: defaultValue ?? "",
-            onValueChange: onValueChange
-              ? (v: unknown) => onValueChange(String(v ?? ""))
-              : undefined,
-          })}
-    >
-      <SelectTrigger id={id} size={size} className={cn("w-full", className)}>
-        <SelectValue placeholder={placeholder} />
-      </SelectTrigger>
-      <SelectContent className={contentClassName}>
-        {lista.map((o) => (
-          <SelectItem key={o.valor} value={o.valor} disabled={o.deshabilitada}>
-            {o.etiqueta}
-          </SelectItem>
-        ))}
-      </SelectContent>
-    </Select>
+      size={size}
+      className={className}
+      contentClassName={contentClassName}
+    />
   );
 }

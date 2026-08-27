@@ -1,3 +1,4 @@
+import { fechaHoy } from "@/lib/fechas";
 import Link from "next/link";
 import { CloudRain, Plus } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -24,6 +25,7 @@ import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { formatoNumero } from "@/lib/catalogos";
 import { crearPluviometro, registrarLluvia } from "./acciones";
+import { CampoFecha } from "@/components/ui/campo-fecha";
 
 export const metadata = { title: "Lluvias — RanchOps" };
 
@@ -89,7 +91,7 @@ export default async function LluviasPage({
     );
   const promedioTotal = promedioMes.reduce((a, b) => a + b, 0);
 
-  const hoy = new Date().toISOString().slice(0, 10);
+  const hoy = fechaHoy();
 
   return (
     <div>
@@ -142,7 +144,7 @@ export default async function LluviasPage({
                 <div className="flex flex-wrap items-end gap-3">
                   <div className="space-y-2">
                     <Label htmlFor="fecha-ll">Fecha de la lluvia</Label>
-                    <Input id="fecha-ll" name="fecha" type="date" defaultValue={hoy} required />
+                    <CampoFecha id="fecha-ll" name="fecha" defaultValue={hoy} required />
                   </div>
                   <Input
                     name="obs"
