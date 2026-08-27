@@ -77,11 +77,32 @@ instalación en `/instalacion`.
 
 ## Conceptos del modelo
 
-Rancho → divisiones → potreros → **grupos** (lotes de manejo) → **animales**.
-Todo lo que pasa es un **evento** fechado (vacunación, palpación, parto, pesaje,
-alimentación, movimiento de potrero, nota de bitácora…) ligado a los animales
-que participaron. Un evento con producto descuenta el **inventario** y genera
-**costo**. La **palpación** actualiza el status reproductivo; el **parto** crea
-la cría ligada a su madre; la **venta** saca al animal del inventario activo
-conservando su historial. Los **días de descanso** de cada potrero se calculan
-solos a partir de las entradas y salidas de grupos.
+Rancho → divisiones → potreros → **grupos** (manadas y lotes de manejo) →
+**animales**. Todo lo que pasa es un **evento** fechado (vacunación, palpación,
+parto, pesaje, alimentación, movimiento de potrero, nota de bitácora…) ligado a
+los animales que participaron. Un evento con producto descuenta el
+**inventario** y genera **costo**. La **palpación** actualiza el estado
+reproductivo; el **parto** crea la cría ligada a su madre; la **venta** saca al
+animal del inventario activo conservando su historial. Los **días de descanso**
+de cada potrero se calculan solos a partir de las entradas y salidas de grupos.
+
+Cada animal tiene **especie** (bovino, equino, ovino, caprino, venado, asnal) y
+la **clase** depende de ella: una vaca no puede ser yegua. La clase que le toca
+por edad (becerro → vaquilla/torete → vaca/toro) **se sugiere, nunca se aplica
+sola**: `/ganado` avisa cuántos van y alguien confirma.
+
+Una **jornada de manejo** puede traer varios trabajos sobre los mismos animales
+(vacunar + desparasitar + pesar). Cada trabajo sigue siendo su propio evento,
+pero comparten `sesion_id` y se capturan una sola vez. En `/trabajos/manga` la
+captura es de corrido: arete → Enter → peso → Enter → siguiente, con la
+ganancia diaria calculada al momento; lo que se marque "a venta" pasa directo a
+la nota de venta.
+
+Los **roles** deciden qué se ve: `admin` (todo, incluido el dinero),
+`operador` (ganado y tierra) y `capturista` (solo captura). La navegación
+esconde lo que no toca, pero quien manda es RLS: aunque alguien escriba la URL,
+la base no le devuelve las filas.
+
+Las **fechas** se calculan en la zona del rancho (`America/Hermosillo`, en
+`src/lib/fechas.ts`), no en UTC: si no, lo que se captura de noche se guardaría
+con la fecha del día siguiente.

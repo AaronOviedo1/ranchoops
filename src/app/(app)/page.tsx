@@ -6,8 +6,10 @@ import {
   Fence,
   HandCoins,
   Plus,
+  ListTodo,
   Receipt,
   Skull,
+  Sprout,
   TrendingUp,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -18,7 +20,7 @@ import { BarraSemaforo } from "@/components/barra-semaforo";
 import { GraficaSerieMes } from "@/components/graficas/grafica-serie-mes";
 import { GraficaCategorias } from "@/components/graficas/grafica-categorias";
 import { createClient } from "@/lib/supabase/server";
-import { requireRancho } from "@/lib/auth";
+import { requireMembresia } from "@/lib/auth";
 import {
   CLASES_ANIMAL,
   formatoFecha,
@@ -26,6 +28,7 @@ import {
   formatoNumero,
 } from "@/lib/catalogos";
 import { estadoPotrero } from "@/lib/estados";
+import { uaTotal } from "@/lib/dse";
 import type { PotreroEstado } from "@/lib/tipos";
 
 export const metadata = { title: "Inicio — RanchOps" };
@@ -43,7 +46,9 @@ function indiceMes(fecha: string | null | undefined): number | null {
 }
 
 export default async function InicioPage() {
-  const rancho = await requireRancho();
+  const { rancho, rol } = await requireMembresia();
+  // Costos y ventas son solo de quien administra; a los demás ni se les enseñan.
+  const veDinero = rol === "admin";
   const supabase = await createClient();
 
   const hoy = new Date();
@@ -61,8 +66,9 @@ export default async function InicioPage() {
     { count: pluviometros },
     { data: eventosAnio },
     { data: bitacora },
+    { count: tareasPendientes },
   ] = await Promise.all([
-    supabase.from("animales").select("clase").eq("rancho_id", rancho.id).eq("status", "activo"),
+    supabase.from("animales").select("clase, especie, categoria_dse").eq("rancho_id", rancho.id).eq("status", "activo"),
     supabase.from("v_potrero_estado").select("*").eq("rancho_id", rancho.id),
     supabase
       .from("gastos")
@@ -109,6 +115,11 @@ export default async function InicioPage() {
       .order("fecha", { ascending: false })
       .order("created_at", { ascending: false })
       .limit(8),
+    supabase
+      .from("tareas")
+      .select("id", { count: "exact", head: true })
+      .eq("rancho_id", rancho.id)
+      .in("estado", ["pendiente", "en_curso"]),
   ]);
 
   const porClase = new Map<string, number>();
@@ -116,6 +127,12 @@ export default async function InicioPage() {
   const totalCabezas = (activos ?? []).length;
 
   const estados = (potreros ?? []) as PotreroEstado[];
+
+  // Carga del rancho en UA (por la clase de cada animal, aunque todavía no
+  // estén repartidos en potreros) y el coeficiente como se platica: ha por UA.
+  const uaHato = uaTotal(activos ?? []);
+  const hasTotales = estados.reduce((s, p) => s + (p.superficie_has ?? 0), 0);
+  const hasPorUA = uaHato > 0 && hasTotales > 0 ? hasTotales / uaHato : null;
   const meta = rancho.meta_dias_descanso;
   const conteoPotreros = { ocupado: 0, descansando: 0, listo: 0, sinDatos: 0 };
   for (const p of estados) {
@@ -250,15 +267,17 @@ export default async function InicioPage() {
           tono="info"
           destacado
         />
-        <StatTile
-          etiqueta={`Balance ${anio}`}
-          valor={formatoMoneda(balance)}
-          detalle={`${formatoMoneda(totalVentas)} vendido`}
-          href="/reportes"
-          icono={TrendingUp}
-          tono={balance >= 0 ? "exito" : "peligro"}
-          destacado
-        />
+        {veDinero && (
+          <StatTile
+            etiqueta={`Balance ${anio}`}
+            valor={formatoMoneda(balance)}
+            detalle={`${formatoMoneda(totalVentas)} vendido`}
+            href="/reportes"
+            icono={TrendingUp}
+            tono={balance >= 0 ? "exito" : "peligro"}
+            destacado
+          />
+        )}
       </div>
 
       {/* Gráficas */}
@@ -301,35 +320,37 @@ export default async function InicioPage() {
           </CardContent>
         </Card>
 
-        <Card>
-          <CardHeader>
-            <CardTitle>Ventas y costos {anio}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            {hayDinero ? (
-              <GraficaSerieMes
-                datos={datosDinero}
-                formato="moneda"
-                series={[
-                  {
-                    clave: "ventas",
-                    etiqueta: "Ventas",
-                    color: "var(--color-chart-1)",
-                  },
-                  {
-                    clave: "costos",
-                    etiqueta: "Costos",
-                    color: "var(--color-chart-3)",
-                  },
-                ]}
-              />
-            ) : (
-              <p className="py-10 text-center text-sm text-muted-foreground">
-                Sin movimientos de dinero este año.
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {veDinero && (
+          <Card>
+            <CardHeader>
+              <CardTitle>Ventas y costos {anio}</CardTitle>
+            </CardHeader>
+            <CardContent>
+              {hayDinero ? (
+                <GraficaSerieMes
+                  datos={datosDinero}
+                  formato="moneda"
+                  series={[
+                    {
+                      clave: "ventas",
+                      etiqueta: "Ventas",
+                      color: "var(--color-chart-1)",
+                    },
+                    {
+                      clave: "costos",
+                      etiqueta: "Costos",
+                      color: "var(--color-chart-3)",
+                    },
+                  ]}
+                />
+              ) : (
+                <p className="py-10 text-center text-sm text-muted-foreground">
+                  Sin movimientos de dinero este año.
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
       </div>
 
       {/* Detalle */}
@@ -467,30 +488,53 @@ export default async function InicioPage() {
           tono="exito"
         />
         <StatTile
+          etiqueta="Tareas pendientes"
+          valor={formatoNumero(tareasPendientes ?? 0)}
+          href="/agenda/tareas"
+          icono={ListTodo}
+          tono={(tareasPendientes ?? 0) > 0 ? "alerta" : "neutro"}
+        />
+        <StatTile
+          etiqueta="Carga animal"
+          valor={uaHato > 0 ? `${formatoNumero(uaHato, 1)} UA` : "—"}
+          detalle={
+            hasPorUA != null
+              ? `${formatoNumero(hasPorUA, 1)} ha por UA`
+              : "captura la superficie de tus potreros"
+          }
+          href="/pastoreo"
+          icono={Sprout}
+          tono="info"
+        />
+        <StatTile
           etiqueta={`Mortalidades ${anio}`}
           valor={formatoNumero(muertes)}
           href="/trabajos"
           icono={Skull}
           tono={muertes > 0 ? "peligro" : "neutro"}
         />
-        <StatTile
-          etiqueta="Costos del mes"
-          valor={formatoMoneda(totalGastosMes)}
-          detalle={`${formatoMoneda(totalGastosAnio)} en ${anio}`}
-          href="/costos"
-          icono={Receipt}
-        />
-        <StatTile
-          etiqueta="Cabezas vendidas"
-          valor={formatoNumero(cabezasVendidas)}
-          detalle={
-            cabezasVendidas > 0
-              ? `${formatoMoneda(totalVentas / cabezasVendidas)} por cabeza`
-              : `en ${anio}`
-          }
-          href="/ventas"
-          icono={HandCoins}
-        />
+        {veDinero && (
+          <>
+            <StatTile
+              etiqueta="Costos del mes"
+              valor={formatoMoneda(totalGastosMes)}
+              detalle={`${formatoMoneda(totalGastosAnio)} en ${anio}`}
+              href="/costos"
+              icono={Receipt}
+            />
+            <StatTile
+              etiqueta="Cabezas vendidas"
+              valor={formatoNumero(cabezasVendidas)}
+              detalle={
+                cabezasVendidas > 0
+                  ? `${formatoMoneda(totalVentas / cabezasVendidas)} por cabeza`
+                  : `en ${anio}`
+              }
+              href="/ventas"
+              icono={HandCoins}
+            />
+          </>
+        )}
       </div>
     </div>
   );
