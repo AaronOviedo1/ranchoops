@@ -4,13 +4,15 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { TablaResponsiva } from "@/components/tabla-responsiva";
 import { EmptyState, PageHeader } from "@/components/page-header";
+import { Aviso } from "@/components/aviso";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { etiquetaTrabajo, formatoFecha, formatoMoneda } from "@/lib/catalogos";
 
 export const metadata = { title: "Trabajos — RanchOps" };
 
-export default async function TrabajosPage() {
+export default async function TrabajosPage({ searchParams }: PageProps<"/trabajos">) {
+  const sp = await searchParams;
   const rancho = await requireRancho();
   const supabase = await createClient();
 
@@ -33,14 +35,21 @@ export default async function TrabajosPage() {
     <div>
       <PageHeader titulo="Trabajos de ganado" descripcion="Últimos 100 registros">
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" render={<Link href="/trabajos/manga" />}>
-            <ScanLine className="h-4 w-4" /> Manga
+          {/* La manga es lo que se usa en el corral: va primero. */}
+          <Button render={<Link href="/trabajos/manga" />}>
+            <ScanLine className="h-4 w-4" /> Manga, animal por animal
           </Button>
-          <Button render={<Link href="/trabajos/nuevo" />}>
-            <Plus className="h-4 w-4" /> Trabajar ganado
+          <Button variant="outline" render={<Link href="/trabajos/nuevo" />}>
+            <Plus className="h-4 w-4" /> Trabajo en lote
           </Button>
         </div>
       </PageHeader>
+
+      {sp.ok === "1" && (
+        <Aviso tono="exito" className="mb-4">
+          La jornada quedó guardada en el historial de cada animal.
+        </Aviso>
+      )}
 
       {(eventos ?? []).length === 0 ? (
         <EmptyState

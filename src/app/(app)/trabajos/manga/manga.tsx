@@ -1,66 +1,147 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
-import { Ban, HandCoins, ScanLine, Trash2, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { unstable_rethrow } from "next/navigation";
+import { HandCoins, Loader2, ScanLine, Settings2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Aviso } from "@/components/aviso";
-import { SelectCampo } from "@/components/ui/select-campo";
-import { etiquetaClase, formatoNumero } from "@/lib/catalogos";
-import { edadTexto } from "@/lib/ciclo-vida";
+import { etiquetaClase, etiquetaTrabajo, formatoFecha } from "@/lib/catalogos";
 import { fechaHoy } from "@/lib/fechas";
-import { formatoGdp, gananciaDiaria, gananciaDesdeNacimiento } from "@/lib/pesos";
-import { cn } from "@/lib/utils";
-import { CampoFecha } from "@/components/ui/campo-fecha";
+import type { ProductoTrabajo } from "../componentes-trabajo";
+import { armarEnvio } from "./armar-envio";
+import { guardarBorrador, useBorrador } from "./borrador";
+import { fotosDe, jornadaNueva, type Capturado, type EstadoJornada } from "./estado";
+import { borrarFotosTrabajo } from "./foto-directa";
+import { ListaCapturados } from "./lista-capturados";
+import { PrepararJornada, type PlantillaManga } from "./preparar";
+import { TarjetaAnimal, type AnimalManga } from "./tarjeta-animal";
 
-export type AnimalManga = {
-  id: string;
-  arete_control: string | null;
-  siniga: string | null;
-  clase: string;
-  sexo: "H" | "M" | null;
-  fecha_nacimiento: string | null;
-  peso_nacimiento: number | null;
-  grupo_id: string | null;
-  ultimo: { fecha: string; peso: number } | null;
-};
-
-type Destino = "venta" | "desecho" | null;
-type Capturado = { animal: AnimalManga; peso: number | null; destino: Destino };
+export type { AnimalManga };
 
 /**
- * Captura de corrido en la manga.
+ * La manga, animal por animal.
  *
- * "Un solo input de texto y tú le vas poniendo nomás el peso y ya te pone el
- * siguiente": arete → Enter → peso → Enter → siguiente animal. El teclado
- * nunca se suelta y la ganancia diaria se ve en el momento.
+ * "Hay animales que se les hacen cosas diferentes": primero se dice qué se le
+ * va a hacer a todos, y luego cada animal que pasa por la trampa se busca por
+ * su arete y se le anota lo suyo. El teclado nunca se suelta: arete → Enter →
+ * dato → Enter → siguiente.
+ *
+ * Toda la jornada vive en el teléfono (borrador.ts) hasta que se cierra.
  */
 export function Manga({
   action,
+  existeJornada,
+  ranchoId,
   animales,
   grupos,
+  productos,
+  plantillas,
+  huboError,
 }: {
   action: (formData: FormData) => Promise<void>;
+  existeJornada: (sesionId: string) => Promise<boolean>;
+  ranchoId: string;
   animales: AnimalManga[];
   grupos: { id: string; nombre: string }[];
+  productos: ProductoTrabajo[];
+  plantillas: PlantillaManga[];
+  /** Se regresó con un error del servidor: la jornada sigue, sin preguntar. */
+  huboError: boolean;
 }) {
-  const [fecha, setFecha] = useState(fechaHoy());
+  const borrador = useBorrador(ranchoId);
+  // Una jornada que ya estaba en el teléfono se ofrece; no se retoma sola.
+  const [retomada, setRetomada] = useState(huboError);
   const [busqueda, setBusqueda] = useState("");
-  const [actual, setActual] = useState<AnimalManga | null>(null);
-  const [peso, setPeso] = useState("");
-  const [capturados, setCapturados] = useState<Capturado[]>([]);
+  const [actualId, setActualId] = useState<string | null>(null);
   const [aviso, setAviso] = useState<string | null>(null);
-  const [tambienDestete, setTambienDestete] = useState(false);
-
+  const [yaGuardada, setYaGuardada] = useState<string | null>(null);
+  const [enviando, iniciarEnvio] = useTransition();
+  // La jornada en blanco, con su id, se crea una vez: se vuelve borrador en
+  // cuanto se le cambia algo.
+  const [enBlanco] = useState(() => jornadaNueva(fechaHoy()));
   const campoArete = useRef<HTMLInputElement>(null);
-  const campoPeso = useRef<HTMLInputElement>(null);
 
-  const yaCapturado = useMemo(
-    () => new Set(capturados.map((c) => c.animal.id)),
-    [capturados]
+  const porId = useMemo(() => new Map(animales.map((a) => [a.id, a])), [animales]);
+  const controlados = useMemo(
+    () => new Set(productos.filter((p) => p.controlado).map((p) => p.id)),
+    [productos]
   );
+
+  // Si se mandó a guardar y no se supo en qué quedó (se fue la señal), se le
+  // pregunta al servidor antes de ofrecerla otra vez.
+  const sesionEnviada = borrador?.enviadoEn ? borrador.sesionId : null;
+  useEffect(() => {
+    if (!sesionEnviada) return;
+    let vigente = true;
+    existeJornada(sesionEnviada)
+      .then((existe) => {
+        if (!vigente || !existe) return;
+        setYaGuardada(sesionEnviada);
+        guardarBorrador(ranchoId, null);
+      })
+      .catch(() => {
+        // Sin señal no se puede saber: se ofrece continuar, y el servidor
+        // ignora el reenvío si ya la tenía.
+      });
+    return () => {
+      vigente = false;
+    };
+  }, [sesionEnviada, existeJornada, ranchoId]);
+
+  if (borrador === undefined) {
+    return <div className="mx-auto h-40 max-w-2xl animate-pulse rounded-lg bg-muted" />;
+  }
+
+  // Los animales vendidos o dados de baja desde que se guardó ya no cuentan.
+  const guardado = borrador
+    ? { ...borrador, capturados: borrador.capturados.filter((c) => porId.has(c.animalId)) }
+    : null;
+  const hayAlgo =
+    !!guardado && (guardado.capturados.length > 0 || guardado.fase === "captura");
+
+  if (guardado && hayAlgo && !retomada) {
+    const n = guardado.capturados.length;
+    return (
+      <div className="mx-auto max-w-2xl space-y-3">
+        <Aviso tono="info" titulo="Hay una jornada sin cerrar en este teléfono">
+          <p>
+            Del {formatoFecha(guardado.fecha)}, con {n} {n === 1 ? "animal" : "animales"}{" "}
+            ya {n === 1 ? "capturado" : "capturados"}
+            {guardado.base.length > 0 &&
+              `: ${guardado.base.map((b) => etiquetaTrabajo(b.tipo)).join(" + ")}`}
+            .
+          </p>
+        </Aviso>
+        <div className="flex flex-wrap gap-2">
+          <Button className="flex-1" onClick={() => setRetomada(true)}>
+            Continuar la jornada
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => {
+              void borrarFotosTrabajo(fotosDe(guardado));
+              guardarBorrador(ranchoId, null);
+              setRetomada(true);
+            }}
+          >
+            Descartarla y empezar otra
+          </Button>
+        </div>
+      </div>
+    );
+  }
+
+  const estado: EstadoJornada = guardado ?? enBlanco;
+
+  const actualizar = (cambios: Partial<EstadoJornada>) => {
+    setRetomada(true);
+    // Cualquier cambio después de un envío fallido es una jornada viva otra vez.
+    guardarBorrador(ranchoId, { ...estado, ...cambios, enviadoEn: undefined });
+  };
+
+  const enfocarArete = () => setTimeout(() => campoArete.current?.focus(), 0);
 
   /** Busca por arete o SINIIGA, con o sin espacios. */
   const coincidencias = (texto: string) => {
@@ -71,110 +152,132 @@ export function Manga({
     );
     if (exactos.length > 0) return exactos;
     return animales.filter(
-      (a) =>
-        a.arete_control?.toLowerCase().includes(t) || a.siniga?.toLowerCase().includes(t)
+      (a) => a.arete_control?.toLowerCase().includes(t) || a.siniga?.toLowerCase().includes(t)
     );
   };
 
   const encontrados = busqueda ? coincidencias(busqueda) : [];
 
   const elegir = (a: AnimalManga) => {
-    setActual(a);
+    setActualId(a.id);
     setBusqueda("");
-    setAviso(yaCapturado.has(a.id) ? `#${a.arete_control ?? "s/n"} ya estaba en la lista.` : null);
-    setPeso(capturados.find((c) => c.animal.id === a.id)?.peso?.toString() ?? "");
-    setTimeout(() => campoPeso.current?.focus(), 0);
+    setAviso(
+      estado.capturados.some((c) => c.animalId === a.id)
+        ? `#${a.arete_control ?? "s/n"} ya había pasado: lo que guardes lo corrige.`
+        : null
+    );
   };
 
   const buscarYElegir = () => {
     const r = coincidencias(busqueda);
-    if (r.length === 0) {
-      setAviso(`No hay ningún animal activo con «${busqueda}».`);
-      return;
-    }
-    if (r.length === 1) elegir(r[0]);
+    if (r.length === 0) setAviso(`No hay ningún animal activo con «${busqueda}».`);
+    else if (r.length === 1) elegir(r[0]);
     else setAviso(`${r.length} animales coinciden: elige cuál.`);
   };
 
-  /** Guarda el animal actual y devuelve el foco al arete. */
-  const siguiente = (destino: Destino = null) => {
-    if (!actual) return;
-    const valor = peso.trim() ? Number(peso) : null;
-    setCapturados((prev) => [
-      ...prev.filter((c) => c.animal.id !== actual.id),
-      { animal: actual, peso: valor, destino },
-    ]);
-    setActual(null);
-    setPeso("");
+  const guardarAnimal = (capturado: Capturado) => {
+    actualizar({
+      capturados: [
+        ...estado.capturados.filter((c) => c.animalId !== capturado.animalId),
+        capturado,
+      ],
+    });
+    setActualId(null);
     setAviso(null);
-    setTimeout(() => campoArete.current?.focus(), 0);
+    enfocarArete();
   };
 
-  const quitar = (id: string) =>
-    setCapturados((prev) => prev.filter((c) => c.animal.id !== id));
+  const quitar = (animalId: string) => {
+    const c = estado.capturados.find((x) => x.animalId === animalId);
+    if (c) void borrarFotosTrabajo(c.trabajos.flatMap((t) => (t.foto_ruta ? [t.foto_ruta] : [])));
+    actualizar({ capturados: estado.capturados.filter((x) => x.animalId !== animalId) });
+  };
 
-  const marcar = (id: string, destino: Destino) =>
-    setCapturados((prev) =>
-      prev.map((c) =>
-        c.animal.id === id ? { ...c, destino: c.destino === destino ? null : destino } : c
-      )
+  const cerrar = (irAVenta: boolean) => {
+    const envio = armarEnvio(estado, controlados);
+    const sinReceta = envio.acciones.some(
+      (a) => a.producto_id && controlados.has(a.producto_id) && !(a.mvz && a.receta_folio)
     );
+    if (sinReceta) {
+      setAviso(
+        "Se usó un producto controlado: toca «Cambiar» y captura el MVZ responsable y el folio de receta."
+      );
+      return;
+    }
+    const fd = new FormData();
+    fd.set("origen", "manga");
+    fd.set("sesion_id", estado.sesionId);
+    fd.set("fecha", estado.fecha);
+    fd.set("responsable", estado.responsable);
+    fd.set("acciones", JSON.stringify(envio.acciones));
+    fd.set("valores", JSON.stringify(envio.valores));
+    fd.set("separar", JSON.stringify(envio.separar));
+    for (const id of envio.animalIds) fd.append("animal_id", id);
+    if (irAVenta) fd.set("ir_a_venta", "on");
 
-  // Ganancia del animal en pantalla, con lo que se acaba de teclear.
-  const gdpActual = (() => {
-    if (!actual || !peso.trim()) return null;
-    const hoyPesaje = { fecha, peso: Number(peso) };
+    // Un mismo grupo para toda la jornada solo si todos vienen del mismo.
+    const gruposDeOrigen = new Set(envio.animalIds.map((id) => porId.get(id)?.grupo_id ?? null));
+    const [grupoComun] = gruposDeOrigen.size === 1 ? [...gruposDeOrigen] : [null];
+    if (grupoComun) fd.set("grupo_id", grupoComun);
+
+    setAviso(null);
+    guardarBorrador(ranchoId, { ...estado, enviadoEn: new Date().toISOString() });
+    iniciarEnvio(async () => {
+      try {
+        await action(fd);
+      } catch (e) {
+        // El redirect del servidor viaja como excepción: ese sí debe pasar.
+        unstable_rethrow(e);
+        setAviso(
+          "No se pudo guardar, seguramente por la señal. Lo capturado sigue aquí: vuelve a cerrar la jornada cuando haya señal."
+        );
+      }
+    });
+  };
+
+  if (estado.fase === "preparar") {
     return (
-      gananciaDiaria(actual.ultimo, hoyPesaje) ?? gananciaDesdeNacimiento(actual, hoyPesaje)
+      <div className="mx-auto max-w-2xl space-y-4">
+        {yaGuardada && (
+          <Aviso tono="exito">La jornada anterior sí se guardó. Esta es una nueva.</Aviso>
+        )}
+        <PrepararJornada
+          estado={estado}
+          productos={productos}
+          plantillas={plantillas}
+          onCambio={actualizar}
+          onEmpezar={() => {
+            actualizar({ fase: "captura" });
+            enfocarArete();
+          }}
+        />
+      </div>
     );
-  })();
+  }
 
-  const conPeso = capturados.filter((c) => c.peso != null);
-  const aVenta = capturados.filter((c) => c.destino === "venta");
-  const totalKilos = conPeso.reduce((s, c) => s + (c.peso ?? 0), 0);
-
-  // Un mismo grupo para toda la jornada solo si todos vienen del mismo.
-  const grupoComun = capturados.length
-    ? capturados.every((c) => c.animal.grupo_id === capturados[0].animal.grupo_id)
-      ? capturados[0].animal.grupo_id
-      : null
-    : null;
-
-  const acciones = [
-    { tipo: "pesaje" },
-    ...(tambienDestete ? [{ tipo: "destete" }] : []),
-  ];
-
-  const valores = Object.fromEntries(
-    capturados.map((c) => [
-      c.animal.id,
-      {
-        ...(c.peso != null ? { peso: c.peso } : {}),
-        ...(c.destino ? { destino: c.destino } : {}),
-      },
-    ])
-  );
+  const actual = actualId ? (porId.get(actualId) ?? null) : null;
+  const aVenta = estado.capturados.filter((c) => c.destino === "venta").length;
 
   return (
     <div className="mx-auto max-w-2xl space-y-4">
-      <div className="grid grid-cols-2 gap-3">
-        <div className="space-y-2">
-          <Label htmlFor="fecha-manga">Fecha</Label>
-          <CampoFecha
-            id="fecha-manga"
-            value={fecha}
-            onValueChange={setFecha}
-          />
-        </div>
-        <div className="flex items-end">
-          <label className="flex items-center gap-2 pb-1.5 text-sm">
-            <Checkbox
-              checked={tambienDestete}
-              onCheckedChange={(v) => setTambienDestete(v === true)}
-            />
-            Es el destete
-          </label>
-        </div>
+      <div className="flex items-center justify-between gap-2 rounded-lg border bg-muted/40 px-3 py-2 text-sm">
+        <p className="min-w-0 truncate">
+          <span className="font-medium">{formatoFecha(estado.fecha)}</span>
+          <span className="text-muted-foreground">
+            {" · "}
+            {estado.base.length > 0
+              ? estado.base.map((b) => etiquetaTrabajo(b.tipo)).join(" + ")
+              : "cada animal lo suyo"}
+          </span>
+        </p>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="shrink-0"
+          onClick={() => actualizar({ fase: "preparar" })}
+        >
+          <Settings2 /> Cambiar
+        </Button>
       </div>
 
       {/* El input que nunca se suelta */}
@@ -217,9 +320,7 @@ export function Manga({
                     className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm hover:bg-accent"
                   >
                     <span className="font-medium">#{a.arete_control ?? "s/n"}</span>
-                    <span className="font-mono text-xs text-muted-foreground">
-                      {a.siniga}
-                    </span>
+                    <span className="font-mono text-xs text-muted-foreground">{a.siniga}</span>
                     <span className="ml-auto text-muted-foreground">
                       {etiquetaClase(a.clase)}
                     </span>
@@ -229,85 +330,23 @@ export function Manga({
             )}
           </div>
         ) : (
-          <div className="space-y-3">
-            <div className="flex items-start justify-between gap-2">
-              <div>
-                <p className="font-heading text-2xl font-semibold">
-                  #{actual.arete_control ?? "s/n"}
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  {etiquetaClase(actual.clase)} · {edadTexto(actual.fecha_nacimiento)}
-                  {actual.siniga && ` · ${actual.siniga}`}
-                </p>
-              </div>
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label="Cancelar"
-                onClick={() => {
-                  setActual(null);
-                  setPeso("");
-                  setTimeout(() => campoArete.current?.focus(), 0);
-                }}
-              >
-                <X />
-              </Button>
-            </div>
-
-            <div className="flex flex-wrap gap-3 text-sm">
-              <span className="text-muted-foreground">
-                Último peso:{" "}
-                <span className="font-medium text-foreground">
-                  {actual.ultimo ? `${formatoNumero(actual.ultimo.peso, 1)} kg` : "—"}
-                </span>
-              </span>
-              {gdpActual != null && (
-                <span
-                  className={cn(
-                    "font-medium",
-                    gdpActual >= 0 ? "text-exito-fuerte" : "text-peligro-fuerte"
-                  )}
-                >
-                  {formatoGdp(gdpActual)}
-                </span>
-              )}
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="peso-manga" className="text-base">
-                Peso (kg)
-              </Label>
-              <Input
-                id="peso-manga"
-                ref={campoPeso}
-                type="number"
-                step="0.1"
-                inputMode="decimal"
-                value={peso}
-                placeholder="0.0"
-                className="h-14 text-2xl"
-                onChange={(e) => setPeso(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    e.preventDefault();
-                    siguiente();
-                  }
-                }}
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <Button className="flex-1" onClick={() => siguiente()}>
-                Guardar y seguir
-              </Button>
-              <Button variant="outline" onClick={() => siguiente("venta")}>
-                <HandCoins /> A venta
-              </Button>
-              <Button variant="outline" onClick={() => siguiente("desecho")}>
-                <Ban /> A desecho
-              </Button>
-            </div>
-          </div>
+          <TarjetaAnimal
+            // Cada animal estrena tarjeta: nada del anterior se le queda pegado.
+            key={actual.id}
+            animal={actual}
+            previo={estado.capturados.find((c) => c.animalId === actual.id)}
+            base={estado.base}
+            fecha={estado.fecha}
+            ranchoId={ranchoId}
+            productos={productos}
+            grupos={grupos}
+            onGuardar={guardarAnimal}
+            onCancelar={() => {
+              setActualId(null);
+              setAviso(null);
+              enfocarArete();
+            }}
+          />
         )}
 
         {aviso && (
@@ -317,105 +356,46 @@ export function Manga({
         )}
       </div>
 
-      {capturados.length > 0 && (
-        <div className="rounded-lg border">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 border-b px-3 py-2">
-            <h2 className="font-medium">{capturados.length} en la jornada</h2>
-            <p className="text-sm text-muted-foreground">
-              {conPeso.length > 0 && (
-                <>
-                  {formatoNumero(totalKilos, 0)} kg · promedio{" "}
-                  {formatoNumero(totalKilos / conPeso.length, 1)} kg
-                </>
-              )}
-              {aVenta.length > 0 && ` · ${aVenta.length} a venta`}
-            </p>
-          </div>
-          <ul className="max-h-80 divide-y overflow-y-auto">
-            {capturados.map(({ animal, peso: p, destino }) => (
-              <li key={animal.id} className="flex items-center gap-2 px-3 py-2 text-sm">
-                <span className="w-16 shrink-0 font-medium">
-                  #{animal.arete_control ?? "s/n"}
-                </span>
-                <span className="w-20 shrink-0 text-muted-foreground">
-                  {p != null ? `${formatoNumero(p, 1)} kg` : "sin peso"}
-                </span>
-                <button
-                  type="button"
-                  onClick={() => marcar(animal.id, "venta")}
-                  className={cn(
-                    "rounded-full border px-2 py-0.5 text-xs",
-                    destino === "venta" && "border-primary bg-accent font-medium"
-                  )}
-                >
-                  venta
-                </button>
-                <button
-                  type="button"
-                  onClick={() => marcar(animal.id, "desecho")}
-                  className={cn(
-                    "rounded-full border px-2 py-0.5 text-xs",
-                    destino === "desecho" && "border-primary bg-accent font-medium"
-                  )}
-                >
-                  desecho
-                </button>
-                <button
-                  type="button"
-                  aria-label={`Quitar ${animal.arete_control ?? ""}`}
-                  className="ml-auto text-muted-foreground hover:text-destructive"
-                  onClick={() => quitar(animal.id)}
-                >
-                  <Trash2 className="size-4" />
-                </button>
-              </li>
-            ))}
-          </ul>
-        </div>
+      {estado.capturados.length > 0 && (
+        <ListaCapturados
+          capturados={estado.capturados}
+          animales={porId}
+          grupos={grupos}
+          onEditar={(id) => {
+            const a = porId.get(id);
+            if (a) elegir(a);
+          }}
+          onMarcar={(id, destino) =>
+            actualizar({
+              capturados: estado.capturados.map((c) =>
+                c.animalId === id ? { ...c, destino } : c
+              ),
+            })
+          }
+          onQuitar={quitar}
+        />
       )}
 
-      <form action={action} className="space-y-3">
-        <input type="hidden" name="fecha" value={fecha} />
-        <input type="hidden" name="acciones" value={JSON.stringify(acciones)} />
-        <input type="hidden" name="valores" value={JSON.stringify(valores)} />
-        {grupoComun && <input type="hidden" name="grupo_id" value={grupoComun} />}
-        {capturados.map((c) => (
-          <input key={c.animal.id} type="hidden" name="animal_id" value={c.animal.id} />
-        ))}
-
-        <div className="grid grid-cols-2 gap-3">
-          <div className="space-y-2">
-            <Label htmlFor="responsable-manga">Responsable</Label>
-            <Input id="responsable-manga" name="responsable" placeholder="Vaquero, MVZ…" />
-          </div>
-          {grupos.length > 0 && !grupoComun && (
-            <div className="space-y-2">
-              <Label>Grupo (opcional)</Label>
-              <SelectCampo
-                name="grupo_id"
-                opciones={grupos.map((g) => ({ valor: g.id, etiqueta: g.nombre }))}
-              />
-            </div>
-          )}
-        </div>
-
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" className="flex-1" disabled={capturados.length === 0}>
-            Cerrar jornada ({capturados.length})
+      <div className="flex flex-wrap gap-2">
+        <Button
+          className="flex-1"
+          disabled={estado.capturados.length === 0 || enviando || !!actual}
+          onClick={() => cerrar(false)}
+        >
+          {enviando && <Loader2 className="animate-spin" />}
+          Cerrar jornada ({estado.capturados.length})
+        </Button>
+        {aVenta > 0 && (
+          <Button
+            variant="secondary"
+            className="flex-1"
+            disabled={enviando || !!actual}
+            onClick={() => cerrar(true)}
+          >
+            <HandCoins /> Cerrar y hacer la venta ({aVenta})
           </Button>
-          {aVenta.length > 0 && (
-            <Button
-              type="submit"
-              name="ir_a_venta"
-              value="1"
-              variant="secondary"
-              className="flex-1"
-            >
-              <HandCoins /> Cerrar y hacer la venta ({aVenta.length})
-            </Button>
-          )}
-        </div>
-      </form>
+        )}
+      </div>
     </div>
   );
 }

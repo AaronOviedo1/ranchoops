@@ -40,19 +40,28 @@ export default async function NuevaVentaPage({
   let origen: string | undefined;
 
   if (sesion) {
+    // Toda la jornada, no solo el pesaje: en la manga un animal puede irse a
+    // venta sin haberse pesado, y su marca queda en otro de sus trabajos.
     const { data } = await supabase
       .from("evento_animales")
-      .select("animal_id, valores, eventos!inner(sesion_id, tipo)")
+      .select("animal_id, valores, eventos!inner(sesion_id)")
       .eq("rancho_id", rancho.id)
-      .eq("eventos.sesion_id", sesion)
-      .eq("eventos.tipo", "pesaje");
+      .eq("eventos.sesion_id", sesion);
 
-    preseleccion = ((data ?? []) as unknown as {
+    const porAnimal = new Map<string, { aVenta: boolean; peso: number | null }>();
+    for (const f of (data ?? []) as unknown as {
       animal_id: string;
       valores: { peso?: number; destino?: string } | null;
-    }[])
-      .filter((f) => f.valores?.destino === "venta")
-      .map((f) => ({ animal_id: f.animal_id, peso: f.valores?.peso ?? null }));
+    }[]) {
+      const previo = porAnimal.get(f.animal_id) ?? { aVenta: false, peso: null };
+      porAnimal.set(f.animal_id, {
+        aVenta: previo.aVenta || f.valores?.destino === "venta",
+        peso: previo.peso ?? f.valores?.peso ?? null,
+      });
+    }
+    preseleccion = [...porAnimal]
+      .filter(([, v]) => v.aVenta)
+      .map(([animal_id, v]) => ({ animal_id, peso: v.peso }));
     origen = `${preseleccion.length} ${preseleccion.length === 1 ? "animal marcado" : "animales marcados"} en la manga, con su peso.`;
   } else if (grupo) {
     const [{ data: delGrupo }, { data: pesajes }] = await Promise.all([

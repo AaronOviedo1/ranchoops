@@ -5,33 +5,42 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { fechaHoy } from "@/lib/fechas";
+import { bandera, campo, numero } from "@/lib/formulario";
+import { CATEGORIA_GASTO_POR_TIPO, categoriaInventario } from "@/lib/catalogos";
+import { revalidarInventario } from "./revalidar";
 
-function campo(formData: FormData, nombre: string): string | null {
-  const v = String(formData.get(nombre) ?? "").trim();
-  return v === "" ? null : v;
+/**
+ * A dónde se regresa: a la pestaña desde la que se abrió el diálogo. El slug
+ * se valida contra el catálogo; nunca se redirige a un texto libre del form.
+ */
+function destino(formData: FormData): string {
+  const categoria = categoriaInventario(campo(formData, "categoria"));
+  return categoria ? `/inventario/${categoria.slug}` : "/inventario";
 }
 
 export async function crearProducto(formData: FormData) {
   const rancho = await requireRancho();
   const supabase = await createClient();
+  const volverA = destino(formData);
 
   const nombre = campo(formData, "nombre");
-  if (!nombre) redirect("/inventario");
+  if (!nombre) redirect(volverA);
 
   const { error } = await supabase.from("productos").insert({
     rancho_id: rancho.id,
     nombre,
     tipo: campo(formData, "tipo") ?? "otro",
     unidad: campo(formData, "unidad") ?? "saco",
-    contenido_kg: campo(formData, "contenido_kg") ? Number(campo(formData, "contenido_kg")) : null,
-    costo_unitario: campo(formData, "costo_unitario") ? Number(campo(formData, "costo_unitario")) : null,
-    stock_minimo: campo(formData, "stock_minimo") ? Number(campo(formData, "stock_minimo")) : null,
+    contenido_kg: numero(formData, "contenido_kg"),
+    costo_unitario: numero(formData, "costo_unitario"),
+    stock_minimo: numero(formData, "stock_minimo"),
     proveedor: campo(formData, "proveedor"),
-    dias_retiro: campo(formData, "dias_retiro") ? Number(campo(formData, "dias_retiro")) : null,
+    dias_retiro: numero(formData, "dias_retiro"),
+    controlado: bandera(formData, "controlado"),
   });
-  if (error) redirect(`/inventario?error=${encodeURIComponent(error.message)}`);
-  revalidatePath("/inventario");
-  redirect("/inventario");
+  if (error) redirect(`${volverA}?error=${encodeURIComponent(error.message)}`);
+  revalidarInventario();
+  redirect(volverA);
 }
 
 /** Entrada de inventario (compra); opcionalmente registra también el gasto. */
@@ -42,14 +51,13 @@ export async function registrarEntrada(formData: FormData) {
     data: { user },
   } = await supabase.auth.getUser();
 
+  const volverA = destino(formData);
   const productoId = campo(formData, "producto_id");
-  const cantidad = Number(campo(formData, "cantidad") ?? 0);
-  if (!productoId || !(cantidad > 0)) redirect("/inventario");
+  const cantidad = numero(formData, "cantidad") ?? 0;
+  if (!productoId || !(cantidad > 0)) redirect(volverA);
 
   const fecha = campo(formData, "fecha") ?? fechaHoy();
-  const costoUnitario = campo(formData, "costo_unitario")
-    ? Number(campo(formData, "costo_unitario"))
-    : null;
+  const costoUnitario = numero(formData, "costo_unitario");
   const costoTotal = costoUnitario != null ? costoUnitario * cantidad : null;
   const proveedor = campo(formData, "proveedor");
 
@@ -82,18 +90,9 @@ export async function registrarEntrada(formData: FormData) {
   }
 
   if (formData.get("crear_gasto") === "on" && costoTotal != null) {
-    const categoria =
-      producto?.tipo === "alimento" || producto?.tipo === "suplemento"
-        ? "Alimento"
-        : producto?.tipo === "mineral"
-          ? "Minerales"
-          : producto?.tipo === "vacuna"
-            ? "Vacunas"
-            : producto?.tipo === "semen"
-              ? "Semen"
-              : producto?.tipo === "combustible"
-                ? "Combustible"
-                : "Medicamentos";
+    // Lo que no tiene categoría propia (medicamento, hormonal, otro) se va a
+    // "Medicamentos", como siempre.
+    const categoria = CATEGORIA_GASTO_POR_TIPO[producto?.tipo ?? ""] ?? "Medicamentos";
     await supabase.from("gastos").insert({
       rancho_id: rancho.id,
       fecha,
@@ -106,17 +105,18 @@ export async function registrarEntrada(formData: FormData) {
     revalidatePath("/costos");
   }
 
-  revalidatePath("/inventario");
-  redirect("/inventario");
+  revalidarInventario();
+  redirect(volverA);
 }
 
 export async function ajustarInventario(formData: FormData) {
   const rancho = await requireRancho();
   const supabase = await createClient();
 
+  const volverA = destino(formData);
   const productoId = campo(formData, "producto_id");
-  const cantidad = Number(campo(formData, "cantidad") ?? 0);
-  if (!productoId || !Number.isFinite(cantidad)) redirect("/inventario");
+  const cantidad = numero(formData, "cantidad");
+  if (!productoId || cantidad == null) redirect(volverA);
 
   await supabase.from("inventario_movimientos").insert({
     rancho_id: rancho.id,
@@ -126,6 +126,6 @@ export async function ajustarInventario(formData: FormData) {
     fecha: fechaHoy(),
     obs: campo(formData, "obs") ?? "Ajuste manual",
   });
-  revalidatePath("/inventario");
-  redirect("/inventario");
+  revalidarInventario();
+  redirect(volverA);
 }

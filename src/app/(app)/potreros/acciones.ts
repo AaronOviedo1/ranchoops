@@ -3,7 +3,7 @@
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-import { requireRancho } from "@/lib/auth";
+import { requireMembresia, requireRancho } from "@/lib/auth";
 import { fechaHoy } from "@/lib/fechas";
 
 function campo(formData: FormData, nombre: string): string | null {
@@ -42,26 +42,134 @@ export async function crearPotrero(formData: FormData) {
 export async function actualizarPotrero(id: string, formData: FormData) {
   const rancho = await requireRancho();
   const supabase = await createClient();
-  await supabase
+  const { error } = await supabase
     .from("potreros")
     .update(datosPotrero(formData))
     .eq("id", id)
     .eq("rancho_id", rancho.id);
   revalidatePath("/potreros");
+  revalidatePath("/mapa");
   revalidatePath(`/potreros/${id}`);
-  redirect(`/potreros/${id}`);
+
+  // Editar desde la lista regresa a la lista; desde la ficha, a la ficha.
+  const volver = campo(formData, "volver_a") ?? `/potreros/${id}`;
+  if (error) redirect(`${volver}?error=${encodeURIComponent(error.message)}`);
+  redirect(volver);
 }
 
-export async function desactivarPotrero(id: string) {
+/**
+ * Borra el potrero si nunca se usó; si ya tiene historia, lo archiva.
+ *
+ * Un `delete` arrastraría en cascada sus `grupo_movimientos` y con ellos las
+ * cabezas-día de las que sale la carga animal, así que el borrado real solo se
+ * permite cuando no cuelga nada. Es el mismo trato que reciben los grupos.
+ */
+async function borrarOArchivar(
+  id: string,
+  ranchoId: string,
+  supabase: Awaited<ReturnType<typeof createClient>>
+): Promise<{ archivado: boolean; error?: string }> {
+  const [{ count: movimientos }, { count: gastos }, { count: tareas }, { count: grupos }] =
+    await Promise.all([
+      supabase
+        .from("grupo_movimientos")
+        .select("id", { count: "exact", head: true })
+        .eq("potrero_id", id)
+        .eq("rancho_id", ranchoId),
+      supabase
+        .from("gastos")
+        .select("id", { count: "exact", head: true })
+        .eq("potrero_id", id)
+        .eq("rancho_id", ranchoId),
+      supabase
+        .from("tareas")
+        .select("id", { count: "exact", head: true })
+        .eq("potrero_id", id)
+        .eq("rancho_id", ranchoId),
+      supabase
+        .from("grupos")
+        .select("id", { count: "exact", head: true })
+        .eq("potrero_actual_id", id)
+        .eq("rancho_id", ranchoId),
+    ]);
+
+  const limpio =
+    !movimientos && !gastos && !tareas && !grupos;
+
+  if (limpio) {
+    const { error } = await supabase
+      .from("potreros")
+      .delete()
+      .eq("id", id)
+      .eq("rancho_id", ranchoId);
+    return { archivado: false, error: error?.message };
+  }
+
+  // Los grupos salen primero: un potrero archivado desaparece de las vistas y
+  // el grupo se quedaría pastando en un potrero que ya nadie ve.
+  await supabase
+    .from("grupo_movimientos")
+    .update({ fecha_salida: fechaHoy() })
+    .eq("potrero_id", id)
+    .eq("rancho_id", ranchoId)
+    .is("fecha_salida", null);
+
+  await supabase
+    .from("grupos")
+    .update({ potrero_actual_id: null })
+    .eq("potrero_actual_id", id)
+    .eq("rancho_id", ranchoId);
+
+  const { error } = await supabase
+    .from("potreros")
+    .update({ activo: false })
+    .eq("id", id)
+    .eq("rancho_id", ranchoId);
+
+  return { archivado: true, error: error?.message };
+}
+
+function revalidarPotrero(id: string) {
+  revalidatePath("/potreros");
+  revalidatePath("/mapa");
+  revalidatePath("/grupos");
+  revalidatePath(`/potreros/${id}`);
+}
+
+/** Eliminar desde la lista o desde la ficha del potrero. */
+export async function eliminarPotrero(id: string) {
+  const { rancho, rol } = await requireMembresia();
+  if (rol === "capturista") redirect("/potreros?sin_permiso=1");
+  const supabase = await createClient();
+
+  const { data: potrero } = await supabase
+    .from("potreros")
+    .select("nombre")
+    .eq("id", id)
+    .eq("rancho_id", rancho.id)
+    .single();
+
+  const { archivado, error } = await borrarOArchivar(id, rancho.id, supabase);
+  revalidarPotrero(id);
+
+  if (error) redirect(`/potreros?error=${encodeURIComponent(error)}`);
+  if (archivado) {
+    redirect(`/potreros?archivado=${encodeURIComponent(potrero?.nombre ?? "El potrero")}`);
+  }
+  redirect("/potreros");
+}
+
+/** Devuelve a la lista un potrero archivado. */
+export async function reactivarPotrero(id: string) {
   const rancho = await requireRancho();
   const supabase = await createClient();
   await supabase
     .from("potreros")
-    .update({ activo: false })
+    .update({ activo: true })
     .eq("id", id)
     .eq("rancho_id", rancho.id);
-  revalidatePath("/potreros");
-  redirect("/potreros");
+  revalidarPotrero(id);
+  redirect(`/potreros/${id}`);
 }
 
 // ---- Acciones llamadas desde el mapa (JSON, no formularios) ----
@@ -210,6 +318,45 @@ export async function quitarTrazoPotrero(id: string): Promise<Resultado> {
   revalidatePath("/potreros");
   revalidatePath(`/potreros/${id}`);
   return {};
+}
+
+/** Renombrar sin salir del mapa: es donde se ve cuál es cuál. */
+export async function renombrarPotrero(input: {
+  id: string;
+  nombre: string;
+}): Promise<Resultado> {
+  const rancho = await requireRancho();
+  const supabase = await createClient();
+  const nombre = input.nombre.trim();
+  if (!nombre) return { error: "Ponle nombre al potrero." };
+
+  const { error } = await supabase
+    .from("potreros")
+    .update({ nombre })
+    .eq("id", input.id)
+    .eq("rancho_id", rancho.id);
+  if (error) return { error: error.message };
+
+  revalidarPotrero(input.id);
+  return {};
+}
+
+/**
+ * Eliminar el potrero desde el mapa. Mismo trato que desde la lista (borra si
+ * está limpio, archiva si tiene historia), pero sin redirigir: el mapa se queda
+ * donde está y avisa qué pasó.
+ */
+export async function eliminarPotreroDesdeMapa(
+  id: string
+): Promise<{ error?: string; archivado?: boolean }> {
+  const { rancho, rol } = await requireMembresia();
+  if (rol === "capturista") return { error: "Tu usuario no puede borrar potreros." };
+  const supabase = await createClient();
+
+  const { archivado, error } = await borrarOArchivar(id, rancho.id, supabase);
+  revalidarPotrero(id);
+  if (error) return { error };
+  return { archivado };
 }
 
 /**

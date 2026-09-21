@@ -8,33 +8,57 @@ export type TipoTrabajo = {
   requiereFoto?: boolean;
   /** Captura un valor por animal en vez de uno general. */
   porAnimal?: "peso" | "resultado" | "condicion";
+  /** Los `productos.tipo` que suelen usarse aquí: salen primero en el selector. */
+  tiposProducto?: string[];
 };
 
 export const TIPOS_TRABAJO: TipoTrabajo[] = [
-  { valor: "vacunacion", etiqueta: "Vacunación", usaProducto: true },
-  { valor: "desparasitacion", etiqueta: "Desparasitación", usaProducto: true },
-  { valor: "vitaminado", etiqueta: "Vitaminado", usaProducto: true },
-  { valor: "tratamiento", etiqueta: "Tratamiento médico", usaProducto: true, requiereFoto: true },
-  { valor: "curacion", etiqueta: "Curación", usaProducto: true, requiereFoto: true },
+  { valor: "vacunacion", etiqueta: "Vacunación", usaProducto: true, tiposProducto: ["vacuna"] },
+  { valor: "desparasitacion", etiqueta: "Desparasitación", usaProducto: true, tiposProducto: ["medicamento"] },
+  { valor: "vitaminado", etiqueta: "Vitaminado", usaProducto: true, tiposProducto: ["medicamento", "suplemento"] },
+  { valor: "tratamiento", etiqueta: "Tratamiento médico", usaProducto: true, requiereFoto: true, tiposProducto: ["medicamento"] },
+  { valor: "curacion", etiqueta: "Curación", usaProducto: true, requiereFoto: true, tiposProducto: ["medicamento"] },
   { valor: "pesaje", etiqueta: "Pesaje", usaProducto: false, porAnimal: "peso" },
   { valor: "condicion_corporal", etiqueta: "Condición corporal", usaProducto: false, porAnimal: "condicion" },
   { valor: "aretado", etiqueta: "Aretado", usaProducto: false },
   { valor: "castracion", etiqueta: "Castración", usaProducto: false },
-  { valor: "ia", etiqueta: "Inseminación artificial", usaProducto: true },
-  { valor: "colocacion_cidr", etiqueta: "Colocación de CIDR", usaProducto: true },
-  { valor: "retiro_cidr", etiqueta: "Retiro de CIDR", usaProducto: true },
-  { valor: "aplicacion_hormonal", etiqueta: "Aplicación hormonal", usaProducto: true },
+  { valor: "ia", etiqueta: "Inseminación artificial", usaProducto: true, tiposProducto: ["semen", "hormonal"] },
+  { valor: "colocacion_cidr", etiqueta: "Colocación de CIDR", usaProducto: true, tiposProducto: ["hormonal"] },
+  { valor: "retiro_cidr", etiqueta: "Retiro de CIDR", usaProducto: true, tiposProducto: ["hormonal"] },
+  { valor: "aplicacion_hormonal", etiqueta: "Aplicación hormonal", usaProducto: true, tiposProducto: ["hormonal"] },
   { valor: "palpacion", etiqueta: "Palpación / Dx de gestación", usaProducto: false, porAnimal: "resultado" },
   { valor: "ultrasonido", etiqueta: "Ultrasonido", usaProducto: false, porAnimal: "resultado" },
   { valor: "parto", etiqueta: "Parto", usaProducto: false },
   { valor: "destete", etiqueta: "Destete / Desahije", usaProducto: false, porAnimal: "peso" },
-  { valor: "alimentacion", etiqueta: "Alimentación", usaProducto: true },
+  { valor: "alimentacion", etiqueta: "Alimentación", usaProducto: true, tiposProducto: ["alimento", "suplemento", "mineral"] },
   { valor: "muerte", etiqueta: "Muerte", usaProducto: false },
   { valor: "otro", etiqueta: "Otro", usaProducto: false },
 ];
 
+/** Eventos que no se capturan como trabajo pero salen en los mismos listados. */
+const OTRAS_ETIQUETAS: Record<string, string> = {
+  cambio_grupo: "Cambio de grupo",
+};
+
 export function etiquetaTrabajo(tipo: string): string {
-  return TIPOS_TRABAJO.find((t) => t.valor === tipo)?.etiqueta ?? tipo;
+  return TIPOS_TRABAJO.find((t) => t.valor === tipo)?.etiqueta ?? OTRAS_ETIQUETAS[tipo] ?? tipo;
+}
+
+/**
+ * Los productos en el orden en que conviene ofrecerlos para un trabajo: en una
+ * vacunación primero las vacunas. No filtra en duro, porque siempre hay quien
+ * desparasita con algo que dio de alta como "otro".
+ */
+export function ordenarProductosPara<P extends { tipo: string }>(
+  tipo: string,
+  productos: P[]
+): P[] {
+  const sugeridos = trabajo(tipo)?.tiposProducto ?? [];
+  if (sugeridos.length === 0) return productos;
+  return [
+    ...productos.filter((p) => sugeridos.includes(p.tipo)),
+    ...productos.filter((p) => !sugeridos.includes(p.tipo)),
+  ];
 }
 
 export function trabajo(tipo: string): TipoTrabajo | undefined {
@@ -312,6 +336,24 @@ export function etiquetaArete(valor: string | null | undefined): string {
   return TIPOS_ARETE.find((t) => t.valor === valor)?.etiqueta ?? valor;
 }
 
+/**
+ * Papeles que se le guardan a un animal. Esta lista tiene que coincidir con el
+ * check de `animal_documentos.tipo` (migración 0014).
+ */
+export const TIPOS_DOCUMENTO: { valor: string; etiqueta: string }[] = [
+  { valor: "genomica", etiqueta: "Prueba de genómica" },
+  { valor: "registro", etiqueta: "Certificado de registro" },
+  { valor: "ultrasonido", etiqueta: "Ultrasonido" },
+  { valor: "laboratorio", etiqueta: "Laboratorio" },
+  { valor: "factura", etiqueta: "Factura" },
+  { valor: "otro", etiqueta: "Otro" },
+];
+
+export function etiquetaDocumento(valor: string | null | undefined): string {
+  if (!valor) return "—";
+  return TIPOS_DOCUMENTO.find((t) => t.valor === valor)?.etiqueta ?? valor;
+}
+
 /** Por qué se subió el animal a la báscula. */
 export const EVENTOS_PESAJE: { valor: string; etiqueta: string }[] = [
   { valor: "control", etiqueta: "Control" },
@@ -340,6 +382,95 @@ export const TIPOS_PRODUCTO = [
   { valor: "combustible", etiqueta: "Combustible" },
   { valor: "otro", etiqueta: "Otro" },
 ];
+
+export function etiquetaTipoProducto(tipo: string): string {
+  return TIPOS_PRODUCTO.find((t) => t.valor === tipo)?.etiqueta ?? tipo;
+}
+
+export type CategoriaInventario = {
+  /** Segmento de la URL: /inventario/<slug>. */
+  slug: "alimentos" | "minerales" | "medicinas" | "semen" | "otros";
+  etiqueta: string;
+  /** Los `productos.tipo` que caen en esta pestaña. */
+  tipos: string[];
+  unidadSugerida: string;
+  /** Qué campos tienen sentido aquí: el semen no pesa ni tiene retiro. */
+  campos: {
+    contenidoKg: boolean;
+    diasRetiro: boolean;
+    controlado: boolean;
+    caducidad: boolean;
+  };
+};
+
+/**
+ * Las pestañas del inventario. "Salía todo junto": el alimento se cuenta en
+ * sacos y kilos, la medicina en frascos con caducidad y retiro, y el semen en
+ * pajillas, así que cada cosa va en su cajón con sus propias columnas.
+ */
+export const CATEGORIAS_INVENTARIO: CategoriaInventario[] = [
+  {
+    slug: "alimentos",
+    etiqueta: "Alimentos",
+    tipos: ["alimento", "suplemento"],
+    unidadSugerida: "saco",
+    campos: { contenidoKg: true, diasRetiro: false, controlado: false, caducidad: false },
+  },
+  {
+    slug: "minerales",
+    etiqueta: "Minerales",
+    tipos: ["mineral"],
+    unidadSugerida: "saco",
+    campos: { contenidoKg: true, diasRetiro: false, controlado: false, caducidad: false },
+  },
+  {
+    slug: "medicinas",
+    etiqueta: "Medicamentos y vacunas",
+    tipos: ["medicamento", "vacuna", "hormonal"],
+    unidadSugerida: "frasco",
+    campos: { contenidoKg: false, diasRetiro: true, controlado: true, caducidad: true },
+  },
+  {
+    slug: "semen",
+    etiqueta: "Semen",
+    tipos: ["semen"],
+    unidadSugerida: "pajilla",
+    campos: { contenidoKg: false, diasRetiro: false, controlado: false, caducidad: false },
+  },
+  {
+    slug: "otros",
+    etiqueta: "Otros",
+    tipos: ["combustible", "otro"],
+    unidadSugerida: "litro",
+    campos: { contenidoKg: false, diasRetiro: false, controlado: false, caducidad: false },
+  },
+];
+
+export function categoriaInventario(slug: string | null | undefined) {
+  return CATEGORIAS_INVENTARIO.find((c) => c.slug === slug);
+}
+
+/** Un tipo que no esté en ninguna pestaña cae en "Otros". */
+export function categoriaDeTipo(tipo: string): CategoriaInventario {
+  return (
+    CATEGORIAS_INVENTARIO.find((c) => c.tipos.includes(tipo)) ??
+    CATEGORIAS_INVENTARIO[CATEGORIAS_INVENTARIO.length - 1]
+  );
+}
+
+/**
+ * A qué categoría de gasto se va la compra de un insumo. No es el mismo mapa
+ * que las pestañas: vacunas y medicamentos comparten pestaña pero son gastos
+ * distintos.
+ */
+export const CATEGORIA_GASTO_POR_TIPO: Record<string, string> = {
+  alimento: "Alimento",
+  suplemento: "Alimento",
+  mineral: "Minerales",
+  vacuna: "Vacunas",
+  semen: "Semen",
+  combustible: "Combustible",
+};
 
 /**
  * Qué se puede poner en el mapa. `geometria` decide con qué herramienta se

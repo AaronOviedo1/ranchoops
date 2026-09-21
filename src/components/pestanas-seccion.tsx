@@ -3,7 +3,7 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { pestanasPara, seccionActiva } from "@/lib/secciones";
+import { pestanaCoincide, pestanasPara, seccionActiva } from "@/lib/secciones";
 
 /**
  * Las pantallas hermanas de la sección donde estás parado.
@@ -26,9 +26,9 @@ export function PestanasSeccion({ rol = "admin" }: { rol?: string }) {
       className="sticky top-16 z-20 border-b border-border bg-background/85 backdrop-blur supports-[backdrop-filter]:bg-background/70"
     >
       <div className="mx-auto flex w-full max-w-[1400px] gap-1 overflow-x-auto px-4 md:px-8">
-        {pestanas.map(({ href, etiqueta, icono: Icono }) => {
-          const activa =
-            href === "/" ? pathname === "/" : pathname.startsWith(href);
+        {pestanas.map((pestana) => {
+          const { href, etiqueta, icono: Icono } = pestana;
+          const activa = pestanaCoincide(pathname, pestana);
           return (
             <Link
               key={href}

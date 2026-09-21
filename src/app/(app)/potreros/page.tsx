@@ -1,16 +1,7 @@
 import Link from "next/link";
-import { Fence, Map as MapIcon, Plus } from "lucide-react";
+import { ArchiveRestore, Fence, Map as MapIcon, Pencil, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { TablaPro } from "@/components/tabla-pro";
 import { EmptyState, PageHeader } from "@/components/page-header";
 import { EstadoBadge } from "@/components/estado-badge";
@@ -19,8 +10,14 @@ import { estadoPotrero } from "@/lib/estados";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { formatoFecha, formatoNumero } from "@/lib/catalogos";
-import type { PotreroCarga, PotreroEstado } from "@/lib/tipos";
-import { crearPotrero } from "./acciones";
+import type { Potrero, PotreroCarga, PotreroEstado } from "@/lib/tipos";
+import {
+  actualizarPotrero,
+  crearPotrero,
+  eliminarPotrero,
+  reactivarPotrero,
+} from "./acciones";
+import { DialogoEliminarPotrero, DialogoPotrero } from "./componentes";
 
 export const metadata = { title: "Potreros — RanchOps" };
 
@@ -31,7 +28,9 @@ export default async function PotrerosPage({
   const rancho = await requireRancho();
   const supabase = await createClient();
 
-  const [{ data: estados }, { data: grupos }, { data: cargas }] =
+  const verArchivados = sp.archivados === "1";
+
+  const [{ data: estados }, { data: grupos }, { data: cargas }, { data: completos }] =
     await Promise.all([
       supabase
         .from("v_potrero_estado")
@@ -46,6 +45,14 @@ export default async function PotrerosPage({
         .from("v_potrero_carga")
         .select("*")
         .eq("rancho_id", rancho.id),
+      // La tabla completa, no la vista: el formulario de editar necesita la
+      // vegetación y las notas (si no, guardar desde la lista las borraría), y
+      // las vistas filtran `activo`, así que los archivados solo salen aquí.
+      supabase
+        .from("potreros")
+        .select("*")
+        .eq("rancho_id", rancho.id)
+        .order("nombre"),
     ]);
 
   const nombreGrupo = new Map((grupos ?? []).map((g) => [g.id, g.nombre]));
@@ -56,7 +63,19 @@ export default async function PotrerosPage({
   const meta = rancho.meta_dias_descanso;
   const ocupados = lista.filter((p) => p.grupo_actual_id);
   const listos = lista.filter((p) => !p.grupo_actual_id && (p.dias_descanso ?? 0) >= meta);
+  const potreros = (completos ?? []) as Potrero[];
+  const datosPor = new Map(potreros.map((p) => [p.id, p]));
+  const guardados = potreros.filter((p) => !p.activo);
   const error = typeof sp.error === "string" ? sp.error : null;
+  const archivado = typeof sp.archivado === "string" ? sp.archivado : null;
+  const sinPermiso = sp.sin_permiso === "1";
+
+  /**
+   * Si un potrero ya tuvo grupo no se va a borrar, se va a archivar. Sale de
+   * la misma vista que ya se cargó, sin una consulta por renglón.
+   */
+  const conHistorial = (p: PotreroEstado) =>
+    !!p.grupo_actual_id || !!p.ocupado_desde || !!p.ultima_salida;
 
   return (
     <div>
@@ -67,51 +86,24 @@ export default async function PotrerosPage({
         <Button variant="outline" render={<Link href="/mapa" />}>
           <MapIcon className="h-4 w-4" /> Ver mapa
         </Button>
-        <Dialog>
-          <DialogTrigger
-            render={
-              <Button>
-                <Plus className="h-4 w-4" /> Nuevo potrero
-              </Button>
-            }
-          />
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Nuevo potrero</DialogTitle>
-            </DialogHeader>
-            <form action={crearPotrero} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre</Label>
-                <Input id="nombre" name="nombre" placeholder="El Carricito" required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="superficie_has">Superficie (has)</Label>
-                  <Input id="superficie_has" name="superficie_has" type="number" step="0.1" />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="capacidad_estimada">Capacidad (cabezas)</Label>
-                  <Input id="capacidad_estimada" name="capacidad_estimada" type="number" />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tipo_vegetacion">Tipo de vegetación</Label>
-                <Input id="tipo_vegetacion" name="tipo_vegetacion" placeholder="Buffel, nativo…" />
-              </div>
-              <p className="text-xs text-muted-foreground">
-                El polígono se dibuja después desde el Mapa; la superficie se
-                calcula sola al dibujarlo.
-              </p>
-              <Button type="submit" className="w-full">
-                Crear potrero
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <DialogoPotrero action={crearPotrero} />
       </PageHeader>
 
       {error && (
         <Aviso tono="peligro" className="mb-4">{error}</Aviso>
+      )}
+      {sinPermiso && (
+        <Aviso tono="peligro" className="mb-4">
+          Tu usuario captura, pero no borra potreros. Pídeselo a un
+          administrador del rancho.
+        </Aviso>
+      )}
+      {archivado && (
+        <Aviso tono="alerta" className="mb-4">
+          <strong>{archivado}</strong> ya tenía historial de pastoreo, así que se
+          archivó en vez de borrarse. Sigue contando para la carga de los meses
+          en que se usó.
+        </Aviso>
       )}
 
       {lista.length === 0 ? (
@@ -223,8 +215,106 @@ export default async function PotrerosPage({
                   "—"
                 ),
             },
+            {
+              // Solo en escritorio: en el teléfono la tarjeta entera es un
+              // enlace a la ficha y no puede llevar formularios adentro.
+              clave: "acciones",
+              encabezado: <span className="sr-only">Acciones</span>,
+              etiqueta: "Acciones",
+              enTarjeta: "oculto",
+              celda: (p) => {
+                const potrero = datosPor.get(p.potrero_id);
+                return (
+                  // `relative z-10`: el enlace de la primera celda se estira
+                  // con after:inset-0 sobre toda la fila y taparía los botones.
+                  <div className="relative z-10 flex items-center justify-end gap-1">
+                    {potrero && (
+                      <DialogoPotrero
+                        action={actualizarPotrero.bind(null, p.potrero_id)}
+                        potrero={potrero}
+                        volverA="/potreros"
+                        trigger={
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="size-7 text-muted-foreground"
+                            title="Editar"
+                          >
+                            <Pencil className="size-4" />
+                          </Button>
+                        }
+                      />
+                    )}
+                    <DialogoEliminarPotrero
+                      action={eliminarPotrero.bind(null, p.potrero_id)}
+                      nombre={p.nombre}
+                      conHistorial={conHistorial(p)}
+                      trigger={
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-7 text-muted-foreground"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="size-4" />
+                        </Button>
+                      }
+                    />
+                  </div>
+                );
+              },
+            },
           ]}
         />
+      )}
+
+      {guardados.length > 0 && (
+        <div className="mt-6">
+          {verArchivados ? (
+            <div className="rounded-xl border border-border p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <h2 className="font-heading font-semibold">
+                  Potreros archivados ({guardados.length})
+                </h2>
+                <Button variant="ghost" size="sm" render={<Link href="/potreros" />}>
+                  Ocultar
+                </Button>
+              </div>
+              <ul className="space-y-2">
+                {guardados.map((p) => (
+                  <li
+                    key={p.id}
+                    className="flex items-center justify-between gap-3 rounded-lg border border-border bg-card px-3 py-2"
+                  >
+                    <div className="min-w-0">
+                      <Link href={`/potreros/${p.id}`} className="font-medium underline">
+                        {p.nombre}
+                      </Link>
+                      <span className="ml-2 text-xs text-muted-foreground">
+                        {p.superficie_has
+                          ? `${formatoNumero(p.superficie_has, 1)} has`
+                          : "sin superficie"}
+                      </span>
+                    </div>
+                    <form action={reactivarPotrero.bind(null, p.id)}>
+                      <Button type="submit" variant="outline" size="sm">
+                        <ArchiveRestore className="size-4" /> Reactivar
+                      </Button>
+                    </form>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : (
+            <Button
+              variant="ghost"
+              size="sm"
+              render={<Link href="/potreros?archivados=1" />}
+            >
+              Ver archivados ({guardados.length})
+            </Button>
+          )}
+        </div>
       )}
     </div>
   );

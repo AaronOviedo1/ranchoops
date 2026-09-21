@@ -16,14 +16,16 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Trash2 } from "lucide-react";
+import { Pencil, Trash2 } from "lucide-react";
 import {
   borrarMarcaMapa,
+  eliminarPotreroDesdeMapa,
   guardarGeomPotrero,
   guardarGeometria,
   guardarPunto,
   moverGrupoDesdeMapa,
   quitarTrazoPotrero,
+  renombrarPotrero,
 } from "../potreros/acciones";
 import { tipoInfra, type TipoInfra } from "@/lib/catalogos";
 import { ImportarKmz } from "./importar-kmz";
@@ -38,6 +40,8 @@ export type PotreroMapa = {
   ocupado: boolean;
   dias_descanso: number | null;
   grupo: string | null;
+  /** Ya tuvo grupos: eliminarlo lo archiva en vez de borrarlo. */
+  conHistorial: boolean;
 };
 
 export type PuntoMapa = {
@@ -78,6 +82,7 @@ function coleccionPotreros(
           id: p.id,
           nombre: p.nombre,
           has: p.superficie_has,
+          conHistorial: p.conHistorial,
           color: colorDe(p, meta),
           estado: p.ocupado
             ? `Ocupado por ${p.grupo ?? "?"}`
@@ -201,15 +206,26 @@ export function MapaRancho({
     hectareas?: number;
   } | null>(null);
   // Potrero sobre el que se hizo clic, para mover un grupo ahí.
-  const [moviendo, setMoviendo] = useState<{ id: string; nombre: string } | null>(null);
+  const [moviendo, setMoviendo] = useState<{
+    id: string;
+    nombre: string;
+    conHistorial: boolean;
+  } | null>(null);
   // Lo que no es potrero y se acaba de tocar: área, tubería, bebedero…
   const [marca, setMarca] = useState<{ id: string; nombre: string; tipo: string } | null>(
     null
   );
   // Quitar algo del mapa pide un segundo clic; un resbalón borra un trazo de
   // 300 hectáreas.
-  const [confirmando, setConfirmando] = useState<"marca" | "potrero" | null>(null);
+  const [confirmando, setConfirmando] = useState<
+    "marca" | "potrero" | "eliminar" | null
+  >(null);
   const [guardando, setGuardando] = useState(false);
+  // El nombre se corrige en el mismo panel: es donde se ve cuál es cuál.
+  const [renombrando, setRenombrando] = useState(false);
+  // Lo que ya pasó (se borró, se archivó): el panel del potrero se cierra y si
+  // no se dice aquí, el trabajo se hace en silencio.
+  const [aviso, setAviso] = useState<string | null>(null);
   const modoRef = useRef(modo);
   useEffect(() => {
     modoRef.current = modo;
@@ -420,10 +436,13 @@ export function MapaRancho({
           setMoviendo(null);
           setMarca(null);
           setConfirmando(null);
+          setRenombrando(false);
           return;
         }
 
         setConfirmando(null);
+        setRenombrando(false);
+        setAviso(null);
         const suya = infra?.properties as
           | { id: string; nombre: string; tipo: string }
           | undefined;
@@ -432,9 +451,19 @@ export function MapaRancho({
         );
 
         const pot = potrero?.properties as
-          | { id: string; nombre: string; has: number | null; estado: string }
+          | {
+              id: string;
+              nombre: string;
+              has: number | null;
+              estado: string;
+              conHistorial: boolean;
+            }
           | undefined;
-        setMoviendo(pot ? { id: pot.id, nombre: pot.nombre } : null);
+        setMoviendo(
+          pot
+            ? { id: pot.id, nombre: pot.nombre, conHistorial: !!pot.conHistorial }
+            : null
+        );
 
         const bloques: string[] = [];
         if (infra) {
@@ -635,11 +664,49 @@ export function MapaRancho({
     router.refresh();
   };
 
+  const renombrar = async (formData: FormData) => {
+    if (!moviendo) return;
+    const nombre = String(formData.get("nombre") ?? "").trim();
+    if (!nombre || nombre === moviendo.nombre) return setRenombrando(false);
+    setGuardando(true);
+    setError(null);
+    const r = await renombrarPotrero({ id: moviendo.id, nombre });
+    setGuardando(false);
+    if (r?.error) return setError(r.error);
+    setMoviendo({ ...moviendo, nombre });
+    setRenombrando(false);
+    popupRef.current?.remove();
+    router.refresh();
+  };
+
+  /**
+   * Eliminar el potrero completo, no su dibujo: si nunca tuvo grupos se borra,
+   * y si ya los tuvo se archiva para no llevarse el historial de pastoreo.
+   */
+  const eliminarPotrero = async () => {
+    if (!moviendo) return;
+    setGuardando(true);
+    setError(null);
+    const r = await eliminarPotreroDesdeMapa(moviendo.id);
+    setGuardando(false);
+    if (r?.error) return setError(r.error);
+    setAviso(
+      r.archivado
+        ? `${moviendo.nombre} se archivó: ya tenía historial de pastoreo.`
+        : `${moviendo.nombre} se borró.`
+    );
+    popupRef.current?.remove();
+    setMoviendo(null);
+    setConfirmando(null);
+    router.refresh();
+  };
+
   const limpiar = () => {
     setPendiente(null);
     setMoviendo(null);
     setMarca(null);
     setConfirmando(null);
+    setRenombrando(false);
     setError(null);
     popupRef.current?.remove();
     drawRef.current?.deleteAll();
@@ -780,6 +847,21 @@ export function MapaRancho({
       )}
 
       <div className="pointer-events-none absolute right-3 top-3 z-10 flex w-72 max-w-[calc(100%-1.5rem)] flex-col gap-2">
+        {aviso && (
+          <Card className="pointer-events-auto">
+            <CardContent className="flex items-start gap-2 pt-4 text-sm">
+              <p className="min-w-0 flex-1">{aviso}</p>
+              <button
+                type="button"
+                className="text-xs text-muted-foreground underline"
+                onClick={() => setAviso(null)}
+              >
+                Cerrar
+              </button>
+            </CardContent>
+          </Card>
+        )}
+
         {pendiente?.tipo === "poligono" && modo === "potrero" && (
           <Card className="pointer-events-auto">
             <CardContent className="pt-4">
@@ -858,7 +940,45 @@ export function MapaRancho({
         {moviendo && modo === "ver" && (
           <Card className="pointer-events-auto">
             <CardContent className="space-y-3 pt-4">
-              <p className="text-sm font-medium">{moviendo.nombre}</p>
+              {renombrando ? (
+                <form action={renombrar} className="space-y-2">
+                  <Label className="text-xs">Nombre del potrero</Label>
+                  <Input
+                    name="nombre"
+                    defaultValue={moviendo.nombre}
+                    className="h-8"
+                    autoFocus
+                    required
+                  />
+                  <div className="flex gap-2">
+                    <Button type="submit" size="sm" className="flex-1" disabled={guardando}>
+                      {guardando ? "Guardando…" : "Guardar"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setRenombrando(false)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </form>
+              ) : (
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium">{moviendo.nombre}</p>
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    className="size-7 text-muted-foreground"
+                    title="Renombrar"
+                    onClick={() => setRenombrando(true)}
+                  >
+                    <Pencil className="size-4" />
+                  </Button>
+                </div>
+              )}
 
               {grupos.length > 0 && (
                 <form action={moverGrupoAqui} className="space-y-3">
@@ -885,7 +1005,39 @@ export function MapaRancho({
                 <p className="text-xs text-destructive">No se pudo: {error}</p>
               )}
 
-              {confirmando === "potrero" ? (
+              {confirmando === "eliminar" ? (
+                <div className="space-y-2 border-t pt-3">
+                  <p className="text-xs text-muted-foreground">
+                    {moviendo.conHistorial
+                      ? "Por aquí ya pasaron grupos, así que se archiva: sale del mapa y de las listas, pero su historial de pastoreo se queda. Lo puedes reactivar desde Potreros."
+                      : "Se borra el potrero completo, con todo y trazo. No se puede deshacer."}
+                  </p>
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="destructive"
+                      className="flex-1"
+                      disabled={guardando}
+                      onClick={eliminarPotrero}
+                    >
+                      {guardando
+                        ? "Eliminando…"
+                        : moviendo.conHistorial
+                          ? "Sí, archivarlo"
+                          : "Sí, eliminarlo"}
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => setConfirmando(null)}
+                    >
+                      Cancelar
+                    </Button>
+                  </div>
+                </div>
+              ) : confirmando === "potrero" ? (
                 <div className="space-y-2 border-t pt-3">
                   <p className="text-xs text-muted-foreground">
                     Se borra el dibujo. El potrero se queda con su nombre, su
@@ -913,27 +1065,39 @@ export function MapaRancho({
                   </div>
                 </div>
               ) : (
-                <div className="flex gap-2 border-t pt-3">
-                  <Button
-                    type="button"
-                    size="sm"
-                    variant="outline"
-                    className="flex-1"
-                    onClick={() => setConfirmando("potrero")}
-                  >
-                    <Trash2 className="size-4" />
-                    Borrar el trazo
-                  </Button>
+                <div className="space-y-2 border-t pt-3">
+                  <div className="flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      onClick={() => setConfirmando("potrero")}
+                    >
+                      <Trash2 className="size-4" />
+                      Borrar el trazo
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        setMoviendo(null);
+                        popupRef.current?.remove();
+                      }}
+                    >
+                      Cerrar
+                    </Button>
+                  </div>
                   <Button
                     type="button"
                     size="sm"
                     variant="ghost"
-                    onClick={() => {
-                      setMoviendo(null);
-                      popupRef.current?.remove();
-                    }}
+                    className="w-full text-destructive"
+                    onClick={() => setConfirmando("eliminar")}
                   >
-                    Cerrar
+                    <Trash2 className="size-4" />
+                    Eliminar el potrero
                   </Button>
                 </div>
               )}

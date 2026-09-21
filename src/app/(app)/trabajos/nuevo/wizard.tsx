@@ -1,19 +1,24 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import { Check, ChevronLeft, Trash2 } from "lucide-react";
+import { ChevronLeft, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { ESTADOS_REPRODUCTIVOS, TIPOS_TRABAJO, trabajo } from "@/lib/catalogos";
+import { ESTADOS_REPRODUCTIVOS, trabajo } from "@/lib/catalogos";
 import { fechaHoy } from "@/lib/fechas";
 import { cn } from "@/lib/utils";
 import { Aviso } from "@/components/aviso";
 import { SelectCampo } from "@/components/ui/select-campo";
 import { CampoFoto } from "@/components/campo-foto";
 import type { AccionSesion } from "../sesion";
+import {
+  SelectorProducto,
+  SelectorTrabajos,
+  type ProductoTrabajo,
+} from "../componentes-trabajo";
 import { CampoFecha } from "@/components/ui/campo-fecha";
 
 type AnimalMini = {
@@ -25,13 +30,7 @@ type AnimalMini = {
 };
 
 type GrupoMini = { id: string; nombre: string };
-type ProductoMini = {
-  id: string;
-  nombre: string;
-  unidad: string;
-  tipo: string;
-  controlado: boolean;
-};
+type ProductoMini = ProductoTrabajo;
 type PlantillaMini = {
   id: string;
   nombre: string;
@@ -193,34 +192,10 @@ export function WizardTrabajo({
               Puedes elegir varios: se hacen en la misma pasada y los animales se
               capturan una sola vez.
             </p>
-            <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-              {TIPOS_TRABAJO.filter(
-                (t) => !["parto", "muerte", "otro"].includes(t.valor)
-              ).map((t) => {
-                const activa = acciones.some((a) => a.tipo === t.valor);
-                return (
-                  <button
-                    key={t.valor}
-                    type="button"
-                    onClick={() => alternarAccion(t.valor)}
-                    className={cn(
-                      "flex items-start gap-2 rounded-lg border p-3 text-left text-sm font-medium transition-colors hover:bg-accent",
-                      activa && "border-primary bg-accent"
-                    )}
-                  >
-                    <span
-                      className={cn(
-                        "mt-0.5 flex size-4 shrink-0 items-center justify-center rounded-sm border",
-                        activa && "border-primary bg-primary text-primary-foreground"
-                      )}
-                    >
-                      {activa && <Check className="size-3" />}
-                    </span>
-                    {t.etiqueta}
-                  </button>
-                );
-              })}
-            </div>
+            <SelectorTrabajos
+              activos={acciones.map((a) => a.tipo)}
+              onAlternar={alternarAccion}
+            />
           </div>
 
           <Button
@@ -368,19 +343,11 @@ export function WizardTrabajo({
                   <div className="grid grid-cols-2 gap-3">
                     <div className="col-span-2 space-y-2">
                       <Label>Producto (descuenta inventario)</Label>
-                      <SelectCampo
-                        value={accion.producto_id ?? ""}
-                        onValueChange={(v) =>
-                          editarAccion(accion.tipo, { producto_id: v || null })
-                        }
-                        opcionVacia="Sin producto"
-                        placeholder="Sin producto"
-                        opciones={productos.map((p) => ({
-                          valor: p.id,
-                          etiqueta: `${p.nombre} (${p.unidad})${
-                            p.controlado ? " · controlado" : ""
-                          }`,
-                        }))}
+                      <SelectorProducto
+                        tipoTrabajo={accion.tipo}
+                        productos={productos}
+                        value={accion.producto_id}
+                        onValueChange={(v) => editarAccion(accion.tipo, { producto_id: v })}
                       />
                     </div>
                     <div className="space-y-2">

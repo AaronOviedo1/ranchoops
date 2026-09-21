@@ -4,17 +4,22 @@ import type { ReactNode } from "react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 /**
- * Las dos maneras de mirar un animal: cómo va (producción) y por dónde ha
- * pasado (historial). Antes iban una debajo de otra y la línea de tiempo
- * empujaba los números fuera de la pantalla.
+ * Las maneras de mirar un animal: cómo va (producción), por dónde ha pasado
+ * (historial) y qué papeles tiene (documentos). Antes iban una debajo de otra
+ * y la línea de tiempo empujaba los números fuera de la pantalla.
  */
 export function PanelAnimal({
   produccion,
   historial,
+  documentos,
+  numDocumentos = 0,
   acciones,
 }: {
   produccion: ReactNode;
   historial: ReactNode;
+  documentos?: ReactNode;
+  /** Va en la pestaña: si no se ve el número, nadie la abre. */
+  numDocumentos?: number;
   acciones?: ReactNode;
 }) {
   return (
@@ -23,6 +28,11 @@ export function PanelAnimal({
         <TabsList variant="line">
           <TabsTrigger value="produccion">Producción</TabsTrigger>
           <TabsTrigger value="historial">Historial</TabsTrigger>
+          {documentos && (
+            <TabsTrigger value="documentos">
+              Documentos{numDocumentos > 0 ? ` · ${numDocumentos}` : ""}
+            </TabsTrigger>
+          )}
         </TabsList>
         {acciones && <div className="flex flex-wrap gap-2">{acciones}</div>}
       </div>
@@ -32,6 +42,11 @@ export function PanelAnimal({
       <TabsContent value="historial" className="pt-4">
         {historial}
       </TabsContent>
+      {documentos && (
+        <TabsContent value="documentos" className="pt-4">
+          {documentos}
+        </TabsContent>
+      )}
     </Tabs>
   );
 }

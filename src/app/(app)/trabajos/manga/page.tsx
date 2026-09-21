@@ -5,8 +5,10 @@ import { PageHeader } from "@/components/page-header";
 import { Aviso } from "@/components/aviso";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
-import { registrarSesion } from "../sesion";
+import { existeJornada, registrarSesion } from "../sesion";
 import { Manga, type AnimalManga } from "./manga";
+import type { PlantillaManga } from "./preparar";
+import type { Existencia } from "@/lib/tipos";
 
 export const metadata = { title: "Manga — RanchOps" };
 
@@ -15,11 +17,18 @@ export default async function MangaPage({ searchParams }: PageProps<"/trabajos/m
   const rancho = await requireRancho();
   const supabase = await createClient();
 
-  const [{ data: animales }, { data: grupos }, { data: pesajes }] = await Promise.all([
+  const [
+    { data: animales },
+    { data: grupos },
+    { data: pesajes },
+    { data: productos },
+    { data: existencias },
+    { data: plantillas },
+  ] = await Promise.all([
     supabase
       .from("animales")
       .select(
-        "id, arete_control, siniga, clase, sexo, fecha_nacimiento, peso_nacimiento, grupo_id"
+        "id, arete_control, siniga, clase, sexo, fecha_nacimiento, peso_nacimiento, grupo_id, status_reproductivo"
       )
       .eq("rancho_id", rancho.id)
       .eq("status", "activo")
@@ -37,7 +46,27 @@ export default async function MangaPage({ searchParams }: PageProps<"/trabajos/m
       .select("animal_id, valores, eventos!inner(fecha, tipo)")
       .eq("rancho_id", rancho.id)
       .in("eventos.tipo", ["pesaje", "destete"]),
+    supabase
+      .from("productos")
+      .select("id, nombre, unidad, tipo, controlado")
+      .eq("rancho_id", rancho.id)
+      .eq("activo", true)
+      .order("nombre"),
+    supabase.from("v_existencias").select("producto_id, existencia").eq("rancho_id", rancho.id),
+    supabase
+      .from("plantillas_trabajo")
+      .select("id, nombre, pasos")
+      .eq("rancho_id", rancho.id)
+      .eq("activo", true)
+      .order("nombre"),
   ]);
+
+  const quedan = new Map(
+    ((existencias ?? []) as Pick<Existencia, "producto_id" | "existencia">[]).map((e) => [
+      e.producto_id,
+      e.existencia,
+    ])
+  );
 
   const ultimos = new Map<string, { fecha: string; peso: number }>();
   for (const fila of (pesajes ?? []) as unknown as {
@@ -62,7 +91,7 @@ export default async function MangaPage({ searchParams }: PageProps<"/trabajos/m
     <div>
       <PageHeader
         titulo="Manga"
-        descripcion="Teclea o escanea el arete, captura el peso y pasa al siguiente. Sin ratón."
+        descripcion="Di qué se les va a hacer hoy, y a cada animal que pase por la trampa búscalo por su arete y anótale lo suyo."
       >
         <Button variant="outline" size="sm" render={<Link href="/trabajos" />}>
           <ArrowLeft className="h-4 w-4" /> Trabajos
@@ -75,7 +104,19 @@ export default async function MangaPage({ searchParams }: PageProps<"/trabajos/m
         </Aviso>
       )}
 
-      <Manga action={registrarSesion} animales={lista} grupos={grupos ?? []} />
+      <Manga
+        action={registrarSesion}
+        existeJornada={existeJornada}
+        ranchoId={rancho.id}
+        animales={lista}
+        grupos={grupos ?? []}
+        productos={(productos ?? []).map((p) => ({
+          ...p,
+          existencia: quedan.get(p.id) ?? null,
+        }))}
+        plantillas={(plantillas ?? []) as PlantillaManga[]}
+        huboError={typeof sp.error === "string"}
+      />
     </div>
   );
 }

@@ -50,6 +50,13 @@ export default function manifest(): MetadataRoute.Manifest {
     ],
     shortcuts: [
       {
+        name: "Manga",
+        short_name: "Manga",
+        description: "Animal por animal, por arete",
+        url: "/trabajos/manga",
+        icons: [{ src: "/iconos/icon-192.png", sizes: "192x192" }],
+      },
+      {
         name: "Capturar trabajo",
         short_name: "Capturar",
         description: "Vacunar, palpar, pesar…",

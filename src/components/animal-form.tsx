@@ -114,6 +114,25 @@ export function AnimalForm({
 
   const esHembra = sexo === "H";
 
+  /**
+   * De dónde viene cada padre.
+   *
+   * "Quise meterle al toro que compré la mamá y el papá, pero sólo me deja
+   * poner opciones del mismo rancho": un animal de registro traído de fuera
+   * tiene padres que no están en el hato y solo existen en su certificado.
+   */
+  const [origenMadre, setOrigenMadre] = useState<"rancho" | "fuera">(
+    animal?.madre_id ? "rancho" : animal?.madre_texto ? "fuera" : "rancho"
+  );
+  const [origenPadre, setOrigenPadre] = useState<"rancho" | "fuera">(
+    animal?.padre_id ? "rancho" : animal?.padre_texto ? "fuera" : "rancho"
+  );
+  // Animales viejos podían traer el toro ligado y el nombre escrito a la vez.
+  // Si se guardara sin más, el texto se perdería sin que nadie lo decidiera.
+  const [sementalViejo, setSementalViejo] = useState<string | null>(
+    animal?.padre_id && animal?.padre_texto ? animal.padre_texto : null
+  );
+
   const pasos = [
     { titulo: "Identificación", pie: "Quién es el animal y cómo se reconoce." },
     { titulo: "Nacimiento", pie: "Cuándo nació, cuánto pesó y de quién viene." },
@@ -229,6 +248,21 @@ export function AnimalForm({
         <div className="space-y-2">
           <Label htmlFor="nombre">Nombre (opcional)</Label>
           <Input id="nombre" name="nombre" defaultValue={animal?.nombre ?? ""} />
+        </div>
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5">
+            <Label htmlFor="num_registro">Número de registro</Label>
+            <AyudaInfo titulo="Animal de registro">
+              El folio que le dio su asociación de criadores. Solo lo traen los
+              animales de registro; los demás se quedan con su arete.
+            </AyudaInfo>
+          </div>
+          <Input
+            id="num_registro"
+            name="num_registro"
+            defaultValue={animal?.num_registro ?? ""}
+            placeholder="Folio de la asociación"
+          />
         </div>
 
         <div className="space-y-2">
@@ -439,31 +473,61 @@ export function AnimalForm({
           </div>
         </fieldset>
 
-        <fieldset className="grid grid-cols-2 gap-4 rounded-lg border p-3">
-          <legend className="px-1 text-sm font-medium">Padres</legend>
-          <div className="space-y-2">
-            <Label>Madre</Label>
-            <ComboCampo
-              name="madre_id"
-              defaultValue={animal?.madre_id}
-              placeholder="Buscar por arete o SINIIGA…"
-              opciones={madres.map(opcionAnimal)}
+        <fieldset className="space-y-4 rounded-lg border p-3">
+          <legend className="flex items-center gap-1.5 px-1 text-sm font-medium">
+            Padres
+            <AyudaInfo titulo="Padres del rancho o de fuera">
+              Si el papá o la mamá andan en el rancho, búscalos por su arete y
+              quedan ligados: sus crías salen en su ficha. Si compraste un
+              animal de registro, sus padres no están aquí: captúralos con su
+              nombre y su número de registro, tal como vienen en el certificado.
+            </AyudaInfo>
+          </legend>
+
+          <div className="grid gap-4 md:grid-cols-2">
+            <CampoPadre
+              etiqueta="Madre"
+              origen={origenMadre}
+              onOrigen={setOrigenMadre}
+              nombreId="madre_id"
+              nombreTexto="madre_texto"
+              nombreRegistro="madre_registro"
+              valorId={animal?.madre_id}
+              valorTexto={animal?.madre_texto}
+              valorRegistro={animal?.madre_registro}
+              opciones={madres}
+              placeholderRancho="Buscar por arete o SINIIGA…"
+              placeholderFuera="Nombre de la vaca"
+            />
+            <CampoPadre
+              etiqueta="Padre / semental"
+              origen={origenPadre}
+              onOrigen={setOrigenPadre}
+              nombreId="padre_id"
+              nombreTexto="padre_texto"
+              nombreRegistro="padre_registro"
+              valorId={animal?.padre_id}
+              valorTexto={animal?.padre_texto}
+              valorRegistro={animal?.padre_registro}
+              opciones={padres}
+              placeholderRancho="Toro del rancho…"
+              placeholderFuera="Pajilla o semental: Elemental"
             />
           </div>
-          <div className="space-y-2">
-            <Label>Padre / semental</Label>
-            <ComboCampo
-              name="padre_id"
-              defaultValue={animal?.padre_id}
-              placeholder="Toro del rancho…"
-              opciones={padres.map(opcionAnimal)}
-            />
-            <Input
-              name="padre_texto"
-              defaultValue={animal?.padre_texto ?? ""}
-              placeholder="…o pajilla / semental de fuera: Elemental"
-            />
-          </div>
+
+          {origenPadre === "rancho" && sementalViejo && (
+            <p className="flex items-center gap-2 text-xs text-muted-foreground">
+              <input type="hidden" name="padre_texto" value={sementalViejo} />
+              Semental capturado antes: <strong>{sementalViejo}</strong>
+              <button
+                type="button"
+                className="underline"
+                onClick={() => setSementalViejo(null)}
+              >
+                quitar
+              </button>
+            </p>
+          )}
         </fieldset>
       </section>
 
@@ -578,6 +642,85 @@ export function AnimalForm({
         </div>
       </div>
     </form>
+  );
+}
+
+/**
+ * Un progenitor: o se busca en el rancho, o se escribe el de fuera.
+ *
+ * La rama que no se eligió se DESMONTA, no se esconde: `datosAnimal` escribe
+ * siempre las dos llaves, así que si el campo escondido siguiera mandando su
+ * valor, el animal acabaría con madre del rancho y madre de fuera a la vez.
+ */
+function CampoPadre({
+  etiqueta,
+  origen,
+  onOrigen,
+  nombreId,
+  nombreTexto,
+  nombreRegistro,
+  valorId,
+  valorTexto,
+  valorRegistro,
+  opciones,
+  placeholderRancho,
+  placeholderFuera,
+}: {
+  etiqueta: string;
+  origen: "rancho" | "fuera";
+  onOrigen: (o: "rancho" | "fuera") => void;
+  nombreId: string;
+  nombreTexto: string;
+  nombreRegistro: string;
+  valorId?: string | null;
+  valorTexto?: string | null;
+  valorRegistro?: string | null;
+  opciones: AnimalMini[];
+  placeholderRancho: string;
+  placeholderFuera: string;
+}) {
+  return (
+    <div className="space-y-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <Label>{etiqueta}</Label>
+        <div className="flex gap-1">
+          {(["rancho", "fuera"] as const).map((o) => (
+            <Button
+              key={o}
+              type="button"
+              size="sm"
+              variant={origen === o ? "secondary" : "ghost"}
+              className="h-7 px-2 text-xs"
+              onClick={() => onOrigen(o)}
+            >
+              {o === "rancho" ? "Del rancho" : "De fuera"}
+            </Button>
+          ))}
+        </div>
+      </div>
+
+      {origen === "rancho" ? (
+        <ComboCampo
+          name={nombreId}
+          defaultValue={valorId}
+          placeholder={placeholderRancho}
+          opciones={opciones.map(opcionAnimal)}
+        />
+      ) : (
+        <>
+          <Input
+            name={nombreTexto}
+            defaultValue={valorTexto ?? ""}
+            placeholder={placeholderFuera}
+          />
+          <Input
+            name={nombreRegistro}
+            defaultValue={valorRegistro ?? ""}
+            placeholder="Número de registro"
+          />
+        </>
+      )}
+    </div>
   );
 }
 

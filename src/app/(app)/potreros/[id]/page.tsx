@@ -1,17 +1,9 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
+import { ArchiveRestore } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@/components/ui/dialog";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   Table,
   TableBody,
@@ -20,38 +12,59 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Textarea } from "@/components/ui/textarea";
 import { PageHeader } from "@/components/page-header";
+import { Aviso } from "@/components/aviso";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
 import { formatoFecha, formatoNumero } from "@/lib/catalogos";
-import { actualizarPotrero } from "../acciones";
+import type { Potrero } from "@/lib/tipos";
+import { actualizarPotrero, eliminarPotrero, reactivarPotrero } from "../acciones";
+import { DialogoEliminarPotrero, DialogoPotrero } from "../componentes";
 
 export const metadata = { title: "Potrero — RanchOps" };
 
 export default async function PotreroPage({
   params,
+  searchParams,
 }: PageProps<"/potreros/[id]">) {
   const { id } = await params;
+  const sp = await searchParams;
   const rancho = await requireRancho();
   const supabase = await createClient();
 
-  const { data: potrero } = await supabase
+  const { data: fila } = await supabase
     .from("potreros")
     .select("*")
     .eq("id", id)
     .eq("rancho_id", rancho.id)
     .single();
-  if (!potrero) notFound();
+  if (!fila) notFound();
+  const potrero = fila as Potrero;
 
-  const { data: historial } = await supabase
-    .from("grupo_movimientos")
-    .select("*, grupos(nombre)")
-    .eq("potrero_id", id)
-    .order("fecha_entrada", { ascending: false })
-    .limit(100);
+  const [{ data: historial }, { count: gastos }, { count: tareas }] = await Promise.all([
+    supabase
+      .from("grupo_movimientos")
+      .select("*, grupos(nombre)")
+      .eq("potrero_id", id)
+      .order("fecha_entrada", { ascending: false })
+      .limit(100),
+    supabase
+      .from("gastos")
+      .select("id", { count: "exact", head: true })
+      .eq("potrero_id", id)
+      .eq("rancho_id", rancho.id),
+    supabase
+      .from("tareas")
+      .select("id", { count: "exact", head: true })
+      .eq("potrero_id", id)
+      .eq("rancho_id", rancho.id),
+  ]);
 
   const ocupacion = (historial ?? []).find((h) => !h.fecha_salida);
+  // Con cualquiera de estas colgando, el potrero se archiva en vez de borrarse.
+  const conHistorial =
+    (historial ?? []).length > 0 || (gastos ?? 0) > 0 || (tareas ?? 0) > 0;
+  const error = typeof sp.error === "string" ? sp.error : null;
 
   return (
     <div>
@@ -65,57 +78,36 @@ export default async function PotreroPage({
           .filter(Boolean)
           .join(" · ")}
       >
-        <Dialog>
-          <DialogTrigger render={<Button variant="outline">Editar</Button>} />
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Editar potrero</DialogTitle>
-            </DialogHeader>
-            <form action={actualizarPotrero.bind(null, id)} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="nombre">Nombre</Label>
-                <Input id="nombre" name="nombre" defaultValue={potrero.nombre} required />
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="superficie_has">Superficie (has)</Label>
-                  <Input
-                    id="superficie_has"
-                    name="superficie_has"
-                    type="number"
-                    step="0.1"
-                    defaultValue={potrero.superficie_has ?? ""}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="capacidad_estimada">Capacidad</Label>
-                  <Input
-                    id="capacidad_estimada"
-                    name="capacidad_estimada"
-                    type="number"
-                    defaultValue={potrero.capacidad_estimada ?? ""}
-                  />
-                </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="tipo_vegetacion">Vegetación</Label>
-                <Input
-                  id="tipo_vegetacion"
-                  name="tipo_vegetacion"
-                  defaultValue={potrero.tipo_vegetacion ?? ""}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="notas">Notas</Label>
-                <Textarea id="notas" name="notas" defaultValue={potrero.notas ?? ""} rows={2} />
-              </div>
-              <Button type="submit" className="w-full">
-                Guardar
-              </Button>
-            </form>
-          </DialogContent>
-        </Dialog>
+        <DialogoPotrero
+          action={actualizarPotrero.bind(null, id)}
+          potrero={potrero}
+          volverA={`/potreros/${id}`}
+        />
+        {potrero.activo && (
+          <DialogoEliminarPotrero
+            action={eliminarPotrero.bind(null, id)}
+            nombre={potrero.nombre}
+            conHistorial={conHistorial}
+          />
+        )}
       </PageHeader>
+
+      {error && <Aviso tono="peligro" className="mb-4">{error}</Aviso>}
+
+      {!potrero.activo && (
+        <Aviso tono="alerta" className="mb-4" titulo="Potrero archivado">
+          <p className="mb-2">
+            Este potrero ya no sale en la lista, en el mapa ni en las
+            exportaciones. Su historial de ocupación sigue contando para la
+            carga de los meses en que se usó.
+          </p>
+          <form action={reactivarPotrero.bind(null, id)}>
+            <Button type="submit" variant="outline" size="sm">
+              <ArchiveRestore className="size-4" /> Reactivar potrero
+            </Button>
+          </form>
+        </Aviso>
+      )}
 
       {ocupacion ? (
         <Badge className="mb-4">

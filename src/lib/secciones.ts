@@ -1,21 +1,26 @@
 import {
+  Archive,
   BarChart3,
   Beef,
   CalendarDays,
   CloudRain,
   Fence,
+  Gem,
   HandCoins,
   Home,
   Map,
   Mountain,
   NotebookPen,
   Package,
+  Pill,
   Receipt,
   Settings,
   ShoppingCart,
   Sprout,
   Syringe,
+  TestTube,
   Wallet,
+  Wheat,
   Boxes,
   ClipboardList,
   type LucideIcon,
@@ -29,6 +34,11 @@ export type Pestana = {
   etiqueta: string;
   icono: LucideIcon;
   rol?: RolNav;
+  /**
+   * Solo se prende en su ruta exacta. Es para la pestaña que es prefijo de sus
+   * hermanas: "Todo" (/inventario) no debe quedar marcada en /inventario/semen.
+   */
+  exacta?: boolean;
 };
 
 export type Seccion = {
@@ -99,7 +109,21 @@ export const SECCIONES: Seccion[] = [
       { href: "/ventas", etiqueta: "Ventas", icono: HandCoins },
     ],
   },
-  { href: "/inventario", etiqueta: "Inventario", icono: Package, rol: "operador" },
+  {
+    href: "/inventario",
+    etiqueta: "Inventario",
+    icono: Package,
+    rol: "operador",
+    // Los slugs son los de CATEGORIAS_INVENTARIO (catalogos.ts).
+    pestanas: [
+      { href: "/inventario", etiqueta: "Todo", icono: Package, exacta: true },
+      { href: "/inventario/alimentos", etiqueta: "Alimentos", icono: Wheat },
+      { href: "/inventario/minerales", etiqueta: "Minerales", icono: Gem },
+      { href: "/inventario/medicinas", etiqueta: "Medicamentos y vacunas", icono: Pill },
+      { href: "/inventario/semen", etiqueta: "Semen", icono: TestTube },
+      { href: "/inventario/otros", etiqueta: "Otros", icono: Archive },
+    ],
+  },
   { href: "/reportes", etiqueta: "Reportes", icono: BarChart3, rol: "admin" },
   {
     href: "/configuracion",
@@ -136,6 +160,11 @@ export function pestanasPara(seccion: Seccion, rol: string): Pestana[] {
 
 function coincide(pathname: string, href: string): boolean {
   return href === "/" ? pathname === "/" : pathname.startsWith(href);
+}
+
+/** Si la pestaña es la que se está viendo (para pintarla activa). */
+export function pestanaCoincide(pathname: string, pestana: Pestana): boolean {
+  return pestana.exacta ? pathname === pestana.href : coincide(pathname, pestana.href);
 }
 
 /** Una sección se prende también cuando estás en cualquiera de sus pestañas. */

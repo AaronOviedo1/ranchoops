@@ -7,6 +7,7 @@ import { requireRancho } from "@/lib/auth";
 import { fechaHoy } from "@/lib/fechas";
 import { bandera, campo, fecha as fechaDe, lista, numero, subirArchivo } from "@/lib/formulario";
 import { borrarArchivo } from "@/lib/archivos";
+import { moverAGrupo } from "@/lib/movimientos-grupo";
 import {
   clasesDe,
   especieDeClase,
@@ -43,9 +44,16 @@ function datosAnimal(formData: FormData) {
     peso_objetivo: numero(formData, "peso_objetivo"),
     fecha_objetivo: campo(formData, "fecha_objetivo"),
     procedencia: campo(formData, "procedencia"),
+    num_registro: campo(formData, "num_registro"),
+    // Cada padre es del rancho o de fuera, nunca las dos cosas: el formulario
+    // desmonta la rama que no se eligió, así que la otra llega vacía y se
+    // limpia sola al guardar.
     madre_id: campo(formData, "madre_id"),
+    madre_texto: campo(formData, "madre_texto"),
+    madre_registro: campo(formData, "madre_registro"),
     padre_id: campo(formData, "padre_id"),
     padre_texto: campo(formData, "padre_texto"),
+    padre_registro: campo(formData, "padre_registro"),
     division_id: campo(formData, "division_id"),
     grupo_id: campo(formData, "grupo_id"),
     status_reproductivo: normalizarReproductivo(campo(formData, "status_reproductivo")),
@@ -239,40 +247,22 @@ export async function moverAnimales(formData: FormData) {
   const destino = campo(formData, "destino"); // "grupo" | "division"
   if (ids.length === 0) redirect("/ganado");
 
-  const cambios =
-    destino === "division" ? { division_id: divisionId } : { grupo_id: grupoId };
-
-  const { error } = await supabase
-    .from("animales")
-    .update(cambios)
-    .in("id", ids)
-    .eq("rancho_id", rancho.id);
-
-  if (error) redirect(`/ganado?error=${encodeURIComponent(error.message)}`);
-
-  if (destino !== "division") {
-    const { data: evento } = await supabase
-      .from("eventos")
-      .insert({
-        rancho_id: rancho.id,
-        tipo: "cambio_grupo",
-        fecha: fechaDe(formData),
-        grupo_id: grupoId,
-        resultado: `${ids.length} animales`,
-        creado_por: user?.id,
-      })
-      .select("id")
-      .single();
-
-    if (evento) {
-      await supabase.from("evento_animales").insert(
-        ids.map((animal_id) => ({
-          rancho_id: rancho.id,
-          evento_id: evento.id,
-          animal_id,
-        }))
-      );
-    }
+  if (destino === "division") {
+    const { error } = await supabase
+      .from("animales")
+      .update({ division_id: divisionId })
+      .in("id", ids)
+      .eq("rancho_id", rancho.id);
+    if (error) redirect(`/ganado?error=${encodeURIComponent(error.message)}`);
+  } else {
+    const { error } = await moverAGrupo(supabase, {
+      ranchoId: rancho.id,
+      animalIds: ids,
+      grupoId,
+      fecha: fechaDe(formData),
+      usuarioId: user?.id,
+    });
+    if (error) redirect(`/ganado?error=${encodeURIComponent(error)}`);
   }
 
   revalidatePath("/ganado");
@@ -296,7 +286,7 @@ export async function registrarParto(vacaId: string, formData: FormData) {
 
   const { data: vaca } = await supabase
     .from("animales")
-    .select("id, grupo_id, division_id, padre_id, padre_texto, especie")
+    .select("id, grupo_id, division_id, padre_texto, especie")
     .eq("id", vacaId)
     .eq("rancho_id", rancho.id)
     .single();
@@ -321,8 +311,11 @@ export async function registrarParto(vacaId: string, formData: FormData) {
         fecha_nacimiento: fecha,
         peso_nacimiento: numero(formData, "peso_cria"),
         madre_id: vacaId,
-        padre_id: campo(formData, "padre_id") ?? vaca.padre_id,
+        // El padre lo dice el formulario. Antes, si venía vacío, se heredaba
+        // el `padre_id` de la vaca: ese es el abuelo de la cría, no su padre.
+        padre_id: campo(formData, "padre_id"),
         padre_texto: campo(formData, "padre_texto"),
+        padre_registro: campo(formData, "padre_registro"),
         grupo_id: vaca.grupo_id,
         division_id: vaca.division_id,
       })
@@ -365,6 +358,177 @@ export async function registrarParto(vacaId: string, formData: FormData) {
   revalidatePath(`/ganado/${vacaId}`);
   revalidatePath("/ganado");
   redirect(`/ganado/${vacaId}`);
+}
+
+/**
+ * Liga una cría que ya está dada de alta con su madre (o con su padre, si
+ * quien manda es un toro).
+ *
+ * El parto liga solo a las crías que nacen aquí; esto es para las que se
+ * capturaron sueltas o llegaron del Excel del rancho, que quedaban sin madre y
+ * por eso no salían en su ficha ni contaban en el rendimiento de las vacas.
+ */
+export async function ligarCria(animalId: string, formData: FormData) {
+  const rancho = await requireRancho();
+  const supabase = await createClient();
+  const criaId = campo(formData, "cria_id");
+  const volver = `/ganado/${animalId}`;
+  if (!criaId || criaId === animalId) redirect(volver);
+
+  const [{ data: progenitor }, { data: cria }] = await Promise.all([
+    supabase
+      .from("animales")
+      .select("id, sexo, fecha_nacimiento")
+      .eq("id", animalId)
+      .eq("rancho_id", rancho.id)
+      .single(),
+    supabase
+      .from("animales")
+      .select("id, fecha_nacimiento")
+      .eq("id", criaId)
+      .eq("rancho_id", rancho.id)
+      .single(),
+  ]);
+  if (!progenitor || !cria) redirect(volver);
+
+  // Una cría no puede ser mayor que su madre. No cierra todos los enredos
+  // posibles, pero sí el que se comete al teclear el arete equivocado.
+  if (
+    progenitor.fecha_nacimiento &&
+    cria.fecha_nacimiento &&
+    cria.fecha_nacimiento <= progenitor.fecha_nacimiento
+  ) {
+    redirect(
+      `${volver}?error=${encodeURIComponent(
+        "Esa cría nació antes que el animal: revisa el arete."
+      )}`
+    );
+  }
+
+  const columna = progenitor.sexo === "M" ? "padre_id" : "madre_id";
+  const { error } = await supabase
+    .from("animales")
+    .update({ [columna]: animalId })
+    .eq("id", criaId)
+    .eq("rancho_id", rancho.id);
+  if (error) redirect(`${volver}?error=${encodeURIComponent(error.message)}`);
+
+  if (columna === "madre_id") await coserParto(supabase, rancho.id, animalId, cria);
+
+  revalidatePath(volver);
+  revalidatePath(`/ganado/${criaId}`);
+  revalidatePath("/ganado");
+  redirect(volver);
+}
+
+/**
+ * Si la vaca tiene un parto suelto de esas fechas, le pega la cría.
+ *
+ * Solo cuando hay UNO solo a menos de un mes del nacimiento: con dos partos
+ * cerca no hay manera de saber cuál fue, y la app no adivina.
+ */
+async function coserParto(
+  supabase: Awaited<ReturnType<typeof createClient>>,
+  ranchoId: string,
+  vacaId: string,
+  cria: { id: string; fecha_nacimiento: string | null }
+) {
+  if (!cria.fecha_nacimiento) return;
+
+  const dia = 86400000;
+  const nacimiento = new Date(`${cria.fecha_nacimiento}T12:00:00`).getTime();
+  const desde = new Date(nacimiento - 30 * dia).toISOString().slice(0, 10);
+  const hasta = new Date(nacimiento + 30 * dia).toISOString().slice(0, 10);
+
+  const { data: filas } = await supabase
+    .from("evento_animales")
+    .select("eventos!inner(id, tipo, fecha, detalle)")
+    .eq("animal_id", vacaId)
+    .eq("eventos.tipo", "parto")
+    .gte("eventos.fecha", desde)
+    .lte("eventos.fecha", hasta);
+
+  const partos = ((filas ?? []) as unknown as {
+    eventos: { id: string; detalle: Record<string, unknown> | null };
+  }[])
+    .map((f) => f.eventos)
+    .filter((e) => !(e.detalle as { cria_id?: string } | null)?.cria_id);
+
+  if (partos.length !== 1) return;
+
+  const parto = partos[0];
+  await supabase
+    .from("eventos")
+    .update({ detalle: { ...(parto.detalle ?? {}), cria_id: cria.id } })
+    .eq("id", parto.id)
+    .eq("rancho_id", ranchoId);
+
+  await supabase.from("evento_animales").insert({
+    rancho_id: ranchoId,
+    evento_id: parto.id,
+    animal_id: cria.id,
+    valores: { resultado: "nacimiento" },
+  });
+}
+
+/**
+ * Guarda un papel del animal: la prueba de genómica, su certificado de
+ * registro, un ultrasonido. Hasta ahora solo cabía una foto por animal.
+ */
+export async function subirDocumentoAnimal(animalId: string, formData: FormData) {
+  const rancho = await requireRancho();
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  const volver = `/ganado/${animalId}`;
+
+  const ruta = await subirArchivo(supabase, formData, "archivo", "documentos", rancho.id);
+  if (!ruta) {
+    redirect(`${volver}?error=${encodeURIComponent("No se pudo subir el archivo.")}`);
+  }
+
+  const archivo = formData.get("archivo");
+  const { error } = await supabase.from("animal_documentos").insert({
+    rancho_id: rancho.id,
+    animal_id: animalId,
+    tipo: campo(formData, "tipo") ?? "otro",
+    titulo: campo(formData, "titulo"),
+    fecha: campo(formData, "fecha"),
+    nota: campo(formData, "nota"),
+    archivo_url: ruta,
+    nombre_archivo: archivo instanceof File ? archivo.name : null,
+    mime: archivo instanceof File ? archivo.type : null,
+    creado_por: user?.id,
+  });
+  if (error) redirect(`${volver}?error=${encodeURIComponent(error.message)}`);
+
+  revalidatePath(volver);
+  redirect(volver);
+}
+
+/** Borra el documento y su archivo; si no, el PDF se queda pagando bucket. */
+export async function borrarDocumentoAnimal(id: string) {
+  const rancho = await requireRancho();
+  const supabase = await createClient();
+
+  const { data: doc } = await supabase
+    .from("animal_documentos")
+    .select("id, animal_id, archivo_url")
+    .eq("id", id)
+    .eq("rancho_id", rancho.id)
+    .single();
+  if (!doc) redirect("/ganado");
+
+  await borrarArchivo(supabase, doc.archivo_url);
+  await supabase
+    .from("animal_documentos")
+    .delete()
+    .eq("id", id)
+    .eq("rancho_id", rancho.id);
+
+  revalidatePath(`/ganado/${doc.animal_id}`);
+  redirect(`/ganado/${doc.animal_id}`);
 }
 
 /** Da de baja un animal por muerte, conservando su historial. */

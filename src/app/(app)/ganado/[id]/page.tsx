@@ -1,7 +1,7 @@
 import Link from "next/link";
 import Image from "next/image";
 import { notFound } from "next/navigation";
-import { Beef, Pencil, Syringe } from "lucide-react";
+import { Beef, FileText, Pencil, Syringe, Trash2 } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -10,9 +10,10 @@ import { GRAFICAS_HEX } from "@/lib/colores";
 import { PageHeader } from "@/components/page-header";
 import { createClient } from "@/lib/supabase/server";
 import { requireRancho } from "@/lib/auth";
-import { urlFirmada } from "@/lib/archivos";
+import { urlFirmada, urlsFirmadas } from "@/lib/archivos";
 import {
   etiquetaClase,
+  etiquetaDocumento,
   etiquetaReproductivo,
   etiquetaArete,
   etiquetaTrabajo,
@@ -30,9 +31,26 @@ import {
 } from "@/lib/pesos";
 import { Aviso } from "@/components/aviso";
 import { GraficaPeso, type PuntoPeso } from "@/components/graficas/grafica-peso";
-import type { Animal, AnimalEnRetiro, Evento, EventoAnimal } from "@/lib/tipos";
-import { registrarMuerte, registrarParto } from "../acciones";
-import { DialogoMuerte, DialogoParto } from "./acciones-rapidas";
+import type {
+  Animal,
+  AnimalDocumento,
+  AnimalEnRetiro,
+  Evento,
+  EventoAnimal,
+} from "@/lib/tipos";
+import {
+  borrarDocumentoAnimal,
+  ligarCria,
+  registrarMuerte,
+  registrarParto,
+  subirDocumentoAnimal,
+} from "../acciones";
+import {
+  DialogoDocumento,
+  DialogoLigarCria,
+  DialogoMuerte,
+  DialogoParto,
+} from "./acciones-rapidas";
 import { PanelAnimal } from "./panel";
 
 export const metadata = { title: "Animal — RanchOps" };
@@ -64,17 +82,33 @@ export default async function AnimalPage({ params }: PageProps<"/ganado/[id]">) 
     padre: Pariente | null;
   };
 
-  const [{ data: historial }, { data: crias }, { data: pesos }, { data: retiros }] = await Promise.all([
+  const esMacho = a.sexo === "M";
+  // La columna por la que este animal es padre de alguien. Un toro nunca fue
+  // madre, así que buscarlo por las dos sería trabajo perdido.
+  const ladoPropio = esMacho ? "padre_id" : "madre_id";
+
+  const [
+    { data: historial },
+    { data: crias },
+    { data: pesos },
+    { data: retiros },
+    { data: documentos },
+    { data: candidatos },
+    { data: toros },
+  ] = await Promise.all([
     supabase
       .from("evento_animales")
       .select("*, eventos(*, productos(nombre))")
       .eq("animal_id", id)
       .order("created_at", { ascending: false })
       .limit(200),
+    // Las crías de la vaca y los hijos del toro salen de la misma consulta:
+    // antes la ficha de un semental nunca enseñaba su descendencia.
     supabase
       .from("animales")
       .select("id, arete_control, sexo, fecha_nacimiento, status")
-      .eq("madre_id", id)
+      .eq("rancho_id", rancho.id)
+      .eq(ladoPropio, id)
       .order("fecha_nacimiento", { ascending: false }),
     supabase
       .from("evento_animales")
@@ -86,6 +120,30 @@ export default async function AnimalPage({ params }: PageProps<"/ganado/[id]">) 
       .select("*")
       .eq("animal_id", id)
       .order("retiro_hasta", { ascending: false }),
+    supabase
+      .from("animal_documentos")
+      .select("*")
+      .eq("animal_id", id)
+      .order("fecha", { ascending: false, nullsFirst: false })
+      .order("created_at", { ascending: false }),
+    // Para ligar una cría que ya está dada de alta pero quedó suelta: solo las
+    // que todavía no tienen ese lado ocupado.
+    supabase
+      .from("animales")
+      .select("id, arete_control, siniga, nombre, clase")
+      .eq("rancho_id", rancho.id)
+      .neq("id", id)
+      .is(ladoPropio, null)
+      .order("fecha_nacimiento", { ascending: false })
+      .limit(1000),
+    // Sementales del rancho, para el diálogo de parto.
+    supabase
+      .from("animales")
+      .select("id, arete_control, siniga, nombre, clase")
+      .eq("rancho_id", rancho.id)
+      .eq("sexo", "M")
+      .eq("status", "activo")
+      .order("arete_control"),
   ]);
 
   const eventos = ((historial ?? []) as unknown as (EventoAnimal & {
@@ -116,6 +174,39 @@ export default async function AnimalPage({ params }: PageProps<"/ganado/[id]">) 
   const foto = await urlFirmada(supabase, a.foto_url);
   const partoAction = registrarParto.bind(null, a.id);
   const muerteAction = registrarMuerte.bind(null, a.id);
+  const ligarAction = ligarCria.bind(null, a.id);
+  const documentoAction = subirDocumentoAnimal.bind(null, a.id);
+
+  // ── Papeles del animal (genómica, registro, ultrasonidos) ──
+  const papeles = (documentos ?? []) as AnimalDocumento[];
+  const urlDoc = await urlsFirmadas(
+    supabase,
+    papeles.map((d) => d.archivo_url)
+  );
+
+  // ── A qué cría fue cada parto ──
+  // El evento guarda el id de la cría en su detalle; aquí se cambian por su
+  // arete para que el renglón del historial diga "cría #123" y lleve a su ficha.
+  const criaDeEvento = (e: Evento): string | null => {
+    const detalle = e.detalle as { cria_id?: string } | null;
+    return detalle?.cria_id ?? null;
+  };
+  const idsCrias = [
+    ...new Set(
+      eventos
+        .filter((ea) => ea.eventos.tipo === "parto")
+        .map((ea) => criaDeEvento(ea.eventos))
+        .filter((v): v is string => !!v)
+    ),
+  ];
+  const aretePorCria = new Map<string, string | null>();
+  if (idsCrias.length > 0) {
+    const { data: nacidas } = await supabase
+      .from("animales")
+      .select("id, arete_control")
+      .in("id", idsCrias);
+    for (const c of nacidas ?? []) aretePorCria.set(c.id, c.arete_control);
+  }
 
   // ── Retiro vigente (la app avisa, la persona decide) ──
   const retiro = ((retiros ?? []) as AnimalEnRetiro[])[0];
@@ -261,7 +352,11 @@ export default async function AnimalPage({ params }: PageProps<"/ganado/[id]">) 
       <PageHeader titulo={`#${a.arete_control ?? "s/n"}`}>
         <div className="flex flex-wrap gap-2">
           {a.status === "activo" && a.sexo === "H" && (
-            <DialogoParto action={partoAction} padreSugerido={a.padre_texto} />
+            <DialogoParto
+              action={partoAction}
+              padreSugerido={a.padre_texto}
+              sementales={toros ?? []}
+            />
           )}
           {a.status === "activo" && <DialogoMuerte action={muerteAction} />}
           <Button
@@ -346,29 +441,29 @@ export default async function AnimalPage({ params }: PageProps<"/ganado/[id]">) 
               <CardTitle className="text-base">Genealogía</CardTitle>
             </CardHeader>
             <CardContent className="space-y-2 text-sm">
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Padre</span>
-                {a.padre ? (
-                  <Link href={`/ganado/${a.padre.id}`} className="font-medium underline">
-                    #{a.padre.arete_control ?? "s/n"}
-                  </Link>
-                ) : (
-                  <span className="font-medium">{a.padre_texto ?? "Sin registrar"}</span>
-                )}
-              </div>
-              <div className="flex justify-between gap-4">
-                <span className="text-muted-foreground">Madre</span>
-                {a.madre ? (
-                  <Link href={`/ganado/${a.madre.id}`} className="font-medium underline">
-                    #{a.madre.arete_control ?? "s/n"}
-                  </Link>
-                ) : (
-                  <span className="font-medium">Sin registrar</span>
-                )}
-              </div>
+              {a.num_registro && (
+                <div className="flex justify-between gap-4">
+                  <span className="text-muted-foreground">Registro</span>
+                  <span className="font-mono text-xs font-medium">{a.num_registro}</span>
+                </div>
+              )}
+              <Progenitor
+                etiqueta="Padre"
+                ligado={a.padre}
+                texto={a.padre_texto}
+                registro={a.padre_registro}
+              />
+              <Progenitor
+                etiqueta="Madre"
+                ligado={a.madre}
+                texto={a.madre_texto}
+                registro={a.madre_registro}
+              />
               {(crias ?? []).length > 0 && (
                 <div className="flex justify-between gap-4">
-                  <span className="text-muted-foreground">Crías</span>
+                  <span className="text-muted-foreground">
+                    {esMacho ? "Hijos" : "Crías"}
+                  </span>
                   <span className="font-medium">{crias!.length}</span>
                 </div>
               )}
@@ -433,6 +528,80 @@ export default async function AnimalPage({ params }: PageProps<"/ganado/[id]">) 
         </div>
 
         <PanelAnimal
+          numDocumentos={papeles.length}
+          documentos={
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+                <CardTitle className="text-base">Documentos del animal</CardTitle>
+                <DialogoDocumento action={documentoAction} />
+              </CardHeader>
+              <CardContent>
+                {papeles.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">
+                    Aquí van los papeles del animal: la prueba de genómica, su
+                    certificado de registro, un ultrasonido, la factura. Se
+                    aceptan fotos y PDF.
+                  </p>
+                ) : (
+                  <ul className="divide-y">
+                    {papeles.map((d) => (
+                      <li
+                        key={d.id}
+                        className="flex items-start justify-between gap-3 py-3 first:pt-0 last:pb-0"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-medium">
+                            {etiquetaDocumento(d.tipo)}
+                            {d.titulo && (
+                              <span className="font-normal text-muted-foreground">
+                                {" "}
+                                · {d.titulo}
+                              </span>
+                            )}
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            {d.fecha ? formatoFecha(d.fecha) : "Sin fecha"}
+                            {d.nombre_archivo ? ` · ${d.nombre_archivo}` : ""}
+                          </p>
+                          {d.nota && (
+                            <p className="mt-1 text-sm text-muted-foreground">{d.nota}</p>
+                          )}
+                        </div>
+                        <div className="flex shrink-0 items-center gap-1">
+                          {urlDoc.get(d.archivo_url) && (
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              render={
+                                <a
+                                  href={urlDoc.get(d.archivo_url)}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                />
+                              }
+                            >
+                              <FileText className="size-4" /> Ver
+                            </Button>
+                          )}
+                          <form action={borrarDocumentoAnimal.bind(null, d.id)}>
+                            <Button
+                              type="submit"
+                              variant="ghost"
+                              size="icon"
+                              className="size-8 text-muted-foreground"
+                              title="Eliminar documento"
+                            >
+                              <Trash2 className="size-4" />
+                            </Button>
+                          </form>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </CardContent>
+            </Card>
+          }
           acciones={
             <Button variant="outline" size="sm" render={<Link href="/trabajos/nuevo" />}>
               <Syringe className="h-4 w-4" /> Registrar trabajo
@@ -511,13 +680,26 @@ export default async function AnimalPage({ params }: PageProps<"/ganado/[id]">) 
                 </Card>
               )}
 
-              {(crias ?? []).length > 0 && (
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-base">Crías ({crias!.length})</CardTitle>
-                  </CardHeader>
-                  <CardContent className="flex flex-wrap gap-2">
-                    {crias!.map((c) => (
+              <Card>
+                <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+                  <CardTitle className="text-base">
+                    {esMacho ? "Hijos" : "Crías"} ({(crias ?? []).length})
+                  </CardTitle>
+                  <DialogoLigarCria
+                    action={ligarAction}
+                    candidatos={candidatos ?? []}
+                    esMacho={esMacho}
+                  />
+                </CardHeader>
+                <CardContent className="flex flex-wrap gap-2">
+                  {(crias ?? []).length === 0 ? (
+                    <p className="text-sm text-muted-foreground">
+                      Sin {esMacho ? "hijos" : "crías"} ligadas. Se ligan solas al
+                      registrar un parto; las que ya estaban dadas de alta se
+                      enlazan con el botón de arriba.
+                    </p>
+                  ) : (
+                    crias!.map((c) => (
                       <Link
                         key={c.id}
                         href={`/ganado/${c.id}`}
@@ -529,10 +711,10 @@ export default async function AnimalPage({ params }: PageProps<"/ganado/[id]">) 
                           <span className="ml-1 text-destructive">({c.status})</span>
                         )}
                       </Link>
-                    ))}
-                  </CardContent>
-                </Card>
-              )}
+                    ))
+                  )}
+                </CardContent>
+              </Card>
             </>
           }
           historial={
@@ -562,6 +744,7 @@ export default async function AnimalPage({ params }: PageProps<"/ganado/[id]">) 
                                 {e.dosis ? ` (${e.dosis})` : ""}
                               </span>
                             )}
+                            {e.tipo === "parto" && <RenglonParto evento={e} aretes={aretePorCria} />}
                           </p>
                           {(v?.peso != null ||
                             v?.condicion != null ||
@@ -596,5 +779,81 @@ export default async function AnimalPage({ params }: PageProps<"/ganado/[id]">) 
         />
       </div>
     </div>
+  );
+}
+
+/**
+ * Un renglón de padre o madre.
+ *
+ * Tres estados, no dos: el del rancho lleva liga a su ficha, el de fuera se
+ * enseña con su número de registro (es todo lo que existe de él) y el que
+ * nunca se capturó lo dice.
+ */
+function Progenitor({
+  etiqueta,
+  ligado,
+  texto,
+  registro,
+}: {
+  etiqueta: string;
+  ligado: { id: string; arete_control: string | null } | null;
+  texto: string | null;
+  registro: string | null;
+}) {
+  return (
+    <div className="flex justify-between gap-4">
+      <span className="text-muted-foreground">{etiqueta}</span>
+      {ligado ? (
+        <Link href={`/ganado/${ligado.id}`} className="font-medium underline">
+          #{ligado.arete_control ?? "s/n"}
+        </Link>
+      ) : texto ? (
+        <span className="text-right font-medium">
+          {texto}
+          {registro && (
+            <span className="block font-mono text-xs font-normal text-muted-foreground">
+              reg. {registro}
+            </span>
+          )}
+        </span>
+      ) : (
+        <span className="font-medium">Sin registrar</span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Qué pasó en ese parto: a qué cría fue, o que fue malparto.
+ *
+ * Los partos viejos y los capturados desde el Excel no traen la cría ligada;
+ * decirlo aquí es lo que invita a ligarla desde la tarjeta de crías.
+ */
+function RenglonParto({
+  evento,
+  aretes,
+}: {
+  evento: Evento;
+  aretes: Map<string, string | null>;
+}) {
+  const detalle = evento.detalle as
+    | { cria_id?: string; malparto?: boolean }
+    | null;
+
+  if (detalle?.malparto) {
+    return <span className="font-normal text-muted-foreground"> · malparto</span>;
+  }
+  if (detalle?.cria_id) {
+    return (
+      <>
+        <span className="font-normal text-muted-foreground"> · </span>
+        <Link href={`/ganado/${detalle.cria_id}`} className="font-normal underline">
+          cría #{aretes.get(detalle.cria_id) ?? "s/n"}
+        </Link>
+      </>
+    );
+  }
+  return (
+    <span className="font-normal text-muted-foreground"> · sin cría ligada</span>
   );
 }

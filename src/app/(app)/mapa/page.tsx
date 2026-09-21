@@ -73,6 +73,9 @@ export default async function MapaPage() {
       ocupado: !!e?.grupo_actual_id,
       dias_descanso: e?.dias_descanso ?? null,
       grupo: e?.grupo_actual_id ? grupoPor.get(e.grupo_actual_id) ?? null : null,
+      // Por aquí ya pasaron grupos: si se elimina, se archiva en vez de
+      // borrarse, y el panel del mapa tiene que decirlo antes.
+      conHistorial: !!e?.grupo_actual_id || !!e?.ocupado_desde || !!e?.ultima_salida,
     };
   });
 

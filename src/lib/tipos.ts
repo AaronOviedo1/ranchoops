@@ -126,9 +126,18 @@ export type Animal = {
   peso_objetivo: number | null;
   fecha_objetivo: string | null;
   procedencia: string | null;
+  /** Registro del propio animal en su asociación de criadores. */
+  num_registro: string | null;
+  /**
+   * Cada padre es del rancho (`*_id`) o de fuera (`*_texto` + `*_registro`):
+   * el toro comprado de registro trae papás que nunca van a estar en el hato.
+   */
   madre_id: string | null;
+  madre_texto: string | null;
+  madre_registro: string | null;
   padre_id: string | null;
   padre_texto: string | null;
+  padre_registro: string | null;
   division_id: string | null;
   grupo_id: string | null;
   status: AnimalStatus;
@@ -137,6 +146,24 @@ export type Animal = {
   causa_salida: string | null;
   foto_url: string | null;
   notas: string | null;
+  created_at: string;
+};
+
+/**
+ * Un papel del animal: la prueba de genómica, el certificado de registro, un
+ * ultrasonido. `archivo_url` es la ruta en el bucket privado, no una URL.
+ */
+export type AnimalDocumento = {
+  id: string;
+  rancho_id: string;
+  animal_id: string;
+  tipo: string;
+  titulo: string | null;
+  fecha: string | null;
+  nota: string | null;
+  archivo_url: string;
+  nombre_archivo: string | null;
+  mime: string | null;
   created_at: string;
 };
 

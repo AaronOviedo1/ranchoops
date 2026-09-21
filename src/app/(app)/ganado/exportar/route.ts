@@ -50,15 +50,17 @@ export async function GET(request: NextRequest) {
 
   const filas: (string | number | null | undefined)[][] = [
     [
-      "Arete", "SINIIGA", "Nombre", "Especie", "Clase", "Sexo", "Edad",
+      "Arete", "SINIIGA", "Registro", "Nombre", "Especie", "Clase", "Sexo", "Edad",
       "Raza", "Color de pelaje", "Nacimiento", "Peso al nacer",
       "Peso al destete", "Fecha de destete", "Procedencia", "En campo desde",
-      "Semental", "Grupo", "División", "Status", "Estado reproductivo",
-      "Fecha de salida", "Causa de salida", "Notas",
+      "Padre de fuera", "Registro del padre", "Madre de fuera",
+      "Registro de la madre", "Grupo", "División", "Status",
+      "Estado reproductivo", "Fecha de salida", "Causa de salida", "Notas",
     ],
     ...lista.map((a) => [
       a.arete_control,
       a.siniga,
+      a.num_registro,
       a.nombre,
       a.especie,
       etiquetaClase(a.clase),
@@ -73,6 +75,9 @@ export async function GET(request: NextRequest) {
       a.procedencia,
       a.fecha_en_campo,
       a.padre_texto,
+      a.padre_registro,
+      a.madre_texto,
+      a.madre_registro,
       a.grupos?.nombre,
       a.divisiones?.nombre,
       a.status,
